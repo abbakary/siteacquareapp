@@ -25,13 +25,250 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
+interface ConfirmedSaleRecord {
+  confirmationId: string;
+  idempotencyKey: string;
+  confirmedAt: string;
+  customerId: string;
+  totals: {
+    subtotalTzs: number;
+    discountTzs: number;
+    taxRatePct: number;
+    taxTzs: number;
+    totalTzs: number;
+    paidTzs: number;
+    balanceTzs: number;
+  };
+}
+
+const ALLOWED_PAYMENT_METHODS = new Set([
+  'Cash',
+  'M-Pesa',
+  'Tigo Pesa',
+  'Airtel Money',
+  'Halopesa',
+  'Bank Transfer',
+  'Cheque',
+]);
+
+const ALLOWED_DELIVERY_STATUSES = new Set([
+  'Pending Dispatch',
+  'In Transit',
+  'Delivered',
+]);
+
+const ALLOWED_GRADES = new Set(['Large', 'Medium', 'Small']);
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
 
+  const inFlightSaleKeys = new Set<string>();
+  const confirmedSalesByKey = new Map<string, ConfirmedSaleRecord>();
+
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'DukaAquSmart API', timestamp: new Date().toISOString() });
   });
+
+  // Transaction-Safe Quick Sale Confirmation (Idempotent & Duplicate-Submission Protected)
+  app.post('/api/sales/confirm', (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const idempotencyKey =
+      typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim() : '';
+
+    if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+      res.status(400).json({
+        ok: false,
+        error: 'Valid idempotencyKey is required to confirm sale safely.',
+      });
+      return;
+    }
+
+    if (inFlightSaleKeys.has(idempotencyKey)) {
+      res.status(409).json({
+        ok: false,
+        duplicate: true,
+        error: 'Duplicate submission blocked: this sale is already being processed.',
+      });
+      return;
+    }
+
+    const existing = confirmedSalesByKey.get(idempotencyKey);
+    if (existing) {
+      res.status(409).json({
+        ok: false,
+        duplicate: true,
+        error: 'This sale has already been confirmed. Stock was not deducted twice.',
+        previousConfirmation: existing,
+      });
+      return;
+    }
+
+    inFlightSaleKeys.add(idempotencyKey);
+    try {
+      const customerId = typeof body.customerId === 'string' ? body.customerId.trim() : '';
+      const customerPhone = typeof body.customerPhone === 'string' ? body.customerPhone.trim() : '';
+      const paymentMethod = typeof body.paymentMethod === 'string' ? body.paymentMethod : '';
+      const deliveryStatus = typeof body.deliveryStatus === 'string' ? body.deliveryStatus : '';
+      const deliveryAddress =
+        typeof body.deliveryAddress === 'string' ? body.deliveryAddress.trim() : '';
+      const discountReason =
+        typeof body.discountReason === 'string' ? body.discountReason.trim() : '';
+      const applyTax = body.applyTax !== false;
+      const pinRequired = body.pinRequired === true;
+      const hasPin = typeof body.pin === 'string' && /^\d{4}$/.test(body.pin.trim());
+      const rawLines = Array.isArray(body.lines) ? body.lines : [];
+
+      if (!customerId) {
+        res.status(400).json({ ok: false, error: 'Customer is required.' });
+        return;
+      }
+      if (!/^255\d{9}$/.test(customerPhone)) {
+        res.status(400).json({
+          ok: false,
+          error: 'Customer phone must be a valid 255XXXXXXXXX number.',
+        });
+        return;
+      }
+      if (rawLines.length === 0 || rawLines.length > 50) {
+        res.status(400).json({
+          ok: false,
+          error: 'Sale must contain between 1 and 50 weighing lines.',
+        });
+        return;
+      }
+      if (!ALLOWED_PAYMENT_METHODS.has(paymentMethod)) {
+        res.status(400).json({ ok: false, error: 'Invalid payment method.' });
+        return;
+      }
+      if (!ALLOWED_DELIVERY_STATUSES.has(deliveryStatus)) {
+        res.status(400).json({ ok: false, error: 'Invalid delivery status.' });
+        return;
+      }
+      if (deliveryStatus !== 'Delivered' && !deliveryAddress) {
+        res.status(400).json({
+          ok: false,
+          error: 'Delivery address is required for Pending Dispatch or In Transit orders.',
+        });
+        return;
+      }
+
+      let subtotalTzs = 0;
+      for (const item of rawLines) {
+        if (!item || typeof item !== 'object') {
+          res.status(400).json({ ok: false, error: 'Invalid line item payload.' });
+          return;
+        }
+        const ln = item as Record<string, unknown>;
+        const sourceType = ln.sourceType;
+        const grade = typeof ln.grade === 'string' ? ln.grade : '';
+        const kg = typeof ln.kg === 'number' ? Math.round(ln.kg * 100) / 100 : NaN;
+        const count = typeof ln.count === 'number' ? Math.round(ln.count) : 0;
+        const pricePerKgTzs =
+          typeof ln.pricePerKgTzs === 'number' ? Math.round(ln.pricePerKgTzs) : NaN;
+
+        if (sourceType !== 'lot' && sourceType !== 'pond') {
+          res.status(400).json({ ok: false, error: 'Line sourceType must be lot or pond.' });
+          return;
+        }
+        if (sourceType === 'lot' && (typeof ln.lotId !== 'string' || !ln.lotId.trim())) {
+          res.status(400).json({ ok: false, error: 'Harvest lot ID is required for In Stock lines.' });
+          return;
+        }
+        if (typeof ln.pondCode !== 'string' || !ln.pondCode.trim()) {
+          res.status(400).json({ ok: false, error: 'Pond code is required on every line.' });
+          return;
+        }
+        if (!ALLOWED_GRADES.has(grade)) {
+          res.status(400).json({ ok: false, error: 'Invalid fish grade.' });
+          return;
+        }
+        if (!Number.isFinite(kg) || kg <= 0 || kg > 100000) {
+          res.status(400).json({ ok: false, error: 'Weight (kg) must be greater than 0.' });
+          return;
+        }
+        if (!Number.isFinite(count) || count < 0 || count > 500000) {
+          res.status(400).json({ ok: false, error: 'Fish count must be 0 or greater.' });
+          return;
+        }
+        if (!Number.isFinite(pricePerKgTzs) || pricePerKgTzs <= 0 || pricePerKgTzs > 10000000) {
+          res.status(400).json({ ok: false, error: 'Price/kg must be greater than 0.' });
+          return;
+        }
+        subtotalTzs += Math.round(kg * pricePerKgTzs);
+      }
+
+      const discountTzs =
+        typeof body.discountTzs === 'number' && Number.isFinite(body.discountTzs)
+          ? Math.max(0, Math.round(body.discountTzs))
+          : 0;
+      if (discountTzs > subtotalTzs) {
+        res.status(400).json({ ok: false, error: 'Discount cannot exceed subtotal.' });
+        return;
+      }
+      if (discountTzs > 0 && !discountReason) {
+        res.status(400).json({ ok: false, error: 'Discount reason is required.' });
+        return;
+      }
+
+      const taxableBase = Math.max(0, subtotalTzs - discountTzs);
+      const taxRatePct = applyTax ? 18 : 0;
+      const taxTzs = applyTax ? Math.round(taxableBase * 0.18) : 0;
+      const totalTzs = taxableBase + taxTzs;
+
+      const paidTzs =
+        typeof body.paidTzs === 'number' && Number.isFinite(body.paidTzs)
+          ? Math.round(body.paidTzs)
+          : NaN;
+      if (!Number.isFinite(paidTzs) || paidTzs < 0 || paidTzs > totalTzs) {
+        res.status(400).json({
+          ok: false,
+          error: `Paid amount must be between TZS 0 and TZS ${totalTzs.toLocaleString()}.`,
+        });
+        return;
+      }
+      const balanceTzs = Math.max(0, totalTzs - paidTzs);
+
+      if (pinRequired && !hasPin) {
+        res.status(400).json({
+          ok: false,
+          error: 'Valid 4-digit PIN approval is required for this sale.',
+        });
+        return;
+      }
+
+      const confirmation: ConfirmedSaleRecord = {
+        confirmationId: `CONF-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
+        idempotencyKey,
+        confirmedAt: new Date().toISOString(),
+        customerId,
+        totals: {
+          subtotalTzs,
+          discountTzs,
+          taxRatePct,
+          taxTzs,
+          totalTzs,
+          paidTzs,
+          balanceTzs,
+        },
+      };
+
+      // Keep bounded idempotency cache (max 500 entries FIFO)
+      if (confirmedSalesByKey.size >= 500) {
+        const oldestKey = confirmedSalesByKey.keys().next().value;
+        if (oldestKey) confirmedSalesByKey.delete(oldestKey);
+      }
+      confirmedSalesByKey.set(idempotencyKey, confirmation);
+
+      res.json({
+        ok: true,
+        ...confirmation,
+      });
+    } finally {
+      inFlightSaleKeys.delete(idempotencyKey);
+    }
+  });
+
 
   // Aqua Intelligence Decision Assistant
   app.post('/api/ai/aqua-intelligence', async (req, res) => {
@@ -162,7 +399,9 @@ Respond in ${language === 'sw' ? 'Kiswahili' : 'English'} with:
         const lower = transcript.toLowerCase();
         const wordNumbers: Record<string, number> = {
           moja: 1,
+          kwanza: 1,
           mbili: 2,
+          pili: 2,
           tatu: 3,
           nne: 4,
           tano: 5,
@@ -173,26 +412,50 @@ Respond in ${language === 'sw' ? 'Kiswahili' : 'English'} with:
           kumi: 10,
           ishirini: 20,
           thelathini: 30,
-          kwanza: 1,
-          pili: 2,
+          arobaini: 40,
+          hamsini: 50,
+          sitini: 60,
+          sabini: 70,
+          themanini: 80,
+          tisini: 90,
+          mia: 100,
         };
+
         let qty = 10;
-        const digitMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo)/);
-        if (digitMatch) {
-          qty = parseFloat(digitMatch[1]);
+        const digitWeightMatch =
+          lower.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilo|kilogram)\b/) ||
+          lower.match(/\b(?:kg|kilo|kilogram)\s*(\d+(?:\.\d+)?)\b/);
+        if (digitWeightMatch) {
+          qty = parseFloat(digitWeightMatch[1]);
         } else {
-          for (const [word, val] of Object.entries(wordNumbers)) {
-            if (lower.includes(`kilo ${word}`) || lower.includes(`${word} kilo`)) {
-              qty = val;
-              break;
-            }
+          const wordPattern = Object.keys(wordNumbers).join('|');
+          const wordWeightMatch =
+            lower.match(new RegExp(`\\b(?:kilo|kg)\\s+(?:za\\s+)?(${wordPattern})\\b`)) ||
+            lower.match(new RegExp(`\\b(${wordPattern})\\s+(?:kilo|kg)\\b`));
+          if (wordWeightMatch) {
+            qty = wordNumbers[wordWeightMatch[1]] ?? 10;
           }
         }
+
         let pondCode = 'POND-001';
-        if (lower.includes('pili') || lower.includes('2')) pondCode = 'POND-002';
-        else if (lower.includes('tatu') || lower.includes('3')) pondCode = 'POND-003';
-        else if (lower.includes('nne') || lower.includes('4')) pondCode = 'POND-004';
-        else if (lower.includes('tano') || lower.includes('5')) pondCode = 'POND-005';
+        const pondNumPattern = Object.keys(wordNumbers).join('|');
+        const swPondMatch = lower.match(
+          new RegExp(`\\bbwawa\\s+(?:la\\s+|namba\\s+|no\\.?\\s*)?(${pondNumPattern}|\\d+)\\b`)
+        );
+        const enPondMatch = lower.match(/\bpond[-\s#]*0*(\d+)\b/);
+
+        if (swPondMatch) {
+          const token = swPondMatch[1];
+          const num = /^\d+$/.test(token) ? parseInt(token, 10) : (wordNumbers[token] ?? 1);
+          if (num >= 1 && num <= 999) {
+            pondCode = `POND-${String(num).padStart(3, '0')}`;
+          }
+        } else if (enPondMatch) {
+          const num = parseInt(enPondMatch[1], 10);
+          if (num >= 1 && num <= 999) {
+            pondCode = `POND-${String(num).padStart(3, '0')}`;
+          }
+        }
 
         res.json({
           pondCode,

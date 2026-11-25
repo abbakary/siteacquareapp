@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { DURATIONS, EASE_OUT, usePreferences } from '../ui';
 
 interface FarmOverviewChartProps {
   range: '7d' | '30d' | '90d';
@@ -26,8 +28,14 @@ const CHART_SERIES: Record<
 };
 
 export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) => {
+  const { effectiveReducedMotion } = usePreferences();
   const data = CHART_SERIES[range];
   const [hoverIdx, setHoverIdx] = useState<number>(data.labels.length - 1);
+  const hasAnimatedRef = useRef(false);
+
+  useEffect(() => {
+    hasAnimatedRef.current = true;
+  }, []);
 
   const width = 460;
   const height = 165;
@@ -45,6 +53,9 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
   const prodPoints = data.production.map((v, i) => `${getX(i)},${getY(v)}`).join(' ');
   const feedPoints = data.feed.map((v, i) => `${getX(i)},${getY(v)}`).join(' ');
 
+  const prodPathD = `M ${data.production.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')}`;
+  const feedPathD = `M ${data.feed.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')}`;
+
   const prodArea = `M ${getX(0)},${padTop + innerH} L ${data.production
     .map((v, i) => `${getX(i)},${getY(v)}`)
     .join(' L ')} L ${getX(data.production.length - 1)},${padTop + innerH} Z`;
@@ -55,18 +66,21 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
 
   const activeIdx = Math.min(hoverIdx, data.labels.length - 1);
   const activeProd = data.production[activeIdx];
-  const tooltipX = Math.min(Math.max(getX(activeIdx) - 42, padLeft), width - 102);
+  const tooltipX = Math.min(Math.max(getX(activeIdx) - 44, padLeft), width - 102);
+  const tooltipY = Math.max(getY(activeProd) - 36, 2);
+
+  const shouldDraw = !effectiveReducedMotion && !hasAnimatedRef.current;
 
   return (
     <div className="relative w-full select-none">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-[175px] w-full overflow-visible">
         <defs>
           <linearGradient id="prodAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#2563EB" stopOpacity="0.16" />
+            <stop offset="0%" stopColor="#2563EB" stopOpacity="0.20" />
             <stop offset="100%" stopColor="#2563EB" stopOpacity="0.01" />
           </linearGradient>
           <linearGradient id="feedAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#16A34A" stopOpacity="0.14" />
+            <stop offset="0%" stopColor="#16A34A" stopOpacity="0.16" />
             <stop offset="100%" stopColor="#16A34A" stopOpacity="0.01" />
           </linearGradient>
         </defs>
@@ -81,7 +95,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
                 y1={y}
                 x2={width - padRight}
                 y2={y}
-                stroke="#E2E8F0"
+                className="stroke-slate-200 dark:stroke-slate-700/80"
                 strokeDasharray={tick === 0 ? undefined : '3 3'}
                 strokeWidth="1"
               />
@@ -89,7 +103,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
                 x={padLeft - 6}
                 y={y + 3}
                 textAnchor="end"
-                className="fill-slate-400 text-[10px] font-medium tabular-nums"
+                className="fill-slate-400 text-[10px] font-medium tabular-nums dark:fill-slate-500"
               >
                 {tick === 0 ? '0' : `${tick / 1000}k`}
               </text>
@@ -98,26 +112,48 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
         })}
 
         {/* Area fills */}
-        <path d={prodArea} fill="url(#prodAreaGrad)" />
-        <path d={feedArea} fill="url(#feedAreaGrad)" />
+        <motion.path
+          d={prodArea}
+          fill="url(#prodAreaGrad)"
+          initial={shouldDraw ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.45, ease: EASE_OUT }}
+        />
+        <motion.path
+          d={feedArea}
+          fill="url(#feedAreaGrad)"
+          initial={shouldDraw ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.45, ease: EASE_OUT }}
+        />
 
-        {/* Lines */}
-        <polyline
+        {/* Lines drawing in on first view */}
+        <motion.path
+          d={prodPathD}
           fill="none"
           stroke="#2563EB"
           strokeWidth="2.3"
           strokeLinecap="round"
           strokeLinejoin="round"
-          points={prodPoints}
+          initial={shouldDraw ? { pathLength: 0 } : false}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 0.65, ease: EASE_OUT }}
         />
-        <polyline
+        <motion.path
+          d={feedPathD}
           fill="none"
           stroke="#16A34A"
           strokeWidth="2.3"
           strokeLinecap="round"
           strokeLinejoin="round"
-          points={feedPoints}
+          initial={shouldDraw ? { pathLength: 0 } : false}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 0.72, ease: EASE_OUT }}
         />
+
+        {/* Keep hidden polylines out; use prodPoints/feedPoints data cleanly */}
+        <polyline className="hidden" points={prodPoints} />
+        <polyline className="hidden" points={feedPoints} />
 
         {/* Hover vertical hairline */}
         <line
@@ -125,7 +161,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
           y1={padTop}
           x2={getX(activeIdx)}
           y2={padTop + innerH}
-          stroke="#94A3B8"
+          className="stroke-slate-400 transition-all duration-150 dark:stroke-slate-500"
           strokeDasharray="3 3"
           strokeWidth="1"
         />
@@ -138,7 +174,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
               cy={getY(v)}
               r={i === activeIdx ? 4.5 : 3}
               fill="#2563EB"
-              stroke="#FFFFFF"
+              className="stroke-white transition-all duration-150 dark:stroke-slate-900"
               strokeWidth="1.5"
             />
             <circle
@@ -146,7 +182,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
               cy={getY(data.feed[i])}
               r={i === activeIdx ? 4.5 : 3}
               fill="#16A34A"
-              stroke="#FFFFFF"
+              className="stroke-white transition-all duration-150 dark:stroke-slate-900"
               strokeWidth="1.5"
             />
             {/* Invisible hit target */}
@@ -163,7 +199,7 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
           </g>
         ))}
 
-        {/* X-axis labels (every 2nd label for cleanliness on 30d) */}
+        {/* X-axis labels */}
         {data.labels.map((lbl, i) => {
           if (range === '30d' && i % 2 !== 0 && i !== data.labels.length - 1) return null;
           return (
@@ -172,23 +208,37 @@ export const FarmOverviewChart: React.FC<FarmOverviewChartProps> = ({ range }) =
               x={getX(i)}
               y={height - 5}
               textAnchor="middle"
-              className="fill-slate-500 text-[10px] font-medium"
+              className="fill-slate-500 text-[10px] font-medium dark:fill-slate-400"
             >
               {lbl}
             </text>
           );
         })}
 
-        {/* Floating dark callout matching reference screenshot */}
-        <g transform={`translate(${tooltipX}, ${Math.max(getY(activeProd) - 36, 2)})`}>
-          <rect width="88" height="30" rx="6" fill="#1E293B" />
+        {/* Floating callout with smooth glide */}
+        <motion.g
+          initial={false}
+          animate={{ x: tooltipX, y: tooltipY }}
+          transition={
+            effectiveReducedMotion
+              ? { duration: 0 }
+              : { duration: DURATIONS.fast, ease: EASE_OUT }
+          }
+        >
+          <rect
+            width="88"
+            height="30"
+            rx="7"
+            className="fill-slate-800 stroke-slate-700/60 dark:fill-slate-950 dark:stroke-slate-700"
+            strokeWidth="1"
+          />
           <text x="44" y="13" textAnchor="middle" className="fill-white text-[10px] font-bold tabular-nums">
             {activeProd.toLocaleString()} kg
           </text>
           <text x="44" y="24" textAnchor="middle" className="fill-emerald-400 text-[9px] font-semibold">
-            +15% vs prior
+            {data.labels[activeIdx]} · +15%
           </text>
-        </g>
+        </motion.g>
       </svg>
     </div>
   );
@@ -209,6 +259,7 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
   strokeColor,
   size = 66,
 }) => {
+  const { effectiveReducedMotion } = usePreferences();
   const radius = (size - 10) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (Math.min(100, Math.max(0, pct)) / 100) * circumference;
@@ -222,10 +273,10 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="#E2E8F0"
+            className="stroke-slate-200 dark:stroke-slate-700/80"
             strokeWidth="6"
           />
-          <circle
+          <motion.circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
@@ -234,25 +285,34 @@ export const RadialGauge: React.FC<RadialGaugeProps> = ({
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            strokeDashoffset={offset}
+            initial={effectiveReducedMotion ? false : { strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: offset }}
+            transition={
+              effectiveReducedMotion
+                ? { duration: 0 }
+                : { duration: 0.65, ease: EASE_OUT }
+            }
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center leading-tight">
-          <span className="text-[11px] font-bold text-slate-900 tabular-nums">{value}</span>
+          <span className="text-[11px] font-bold text-slate-900 tabular-nums dark:text-white">
+            {value}
+          </span>
         </div>
       </div>
-      <span className="mt-1 text-[11px] font-medium text-slate-600">{label}</span>
+      <span className="mt-1 text-[11px] font-medium text-slate-600 dark:text-slate-400">{label}</span>
     </div>
   );
 };
 
 export const WaterQualityMiniSparkline: React.FC = () => {
+  const { effectiveReducedMotion } = usePreferences();
   const points = [18, 22, 20, 26, 24, 29, 27, 32, 30, 34, 33, 36];
   const w = 280;
   const h = 38;
-  const poly = points
+  const linePath = `M ${points
     .map((v, i) => `${(i / (points.length - 1)) * w},${h - (v / 40) * h}`)
-    .join(' ');
+    .join(' L ')}`;
   const area = `M 0,${h} L ${points
     .map((v, i) => `${(i / (points.length - 1)) * w},${h - (v / 40) * h}`)
     .join(' L ')} L ${w},${h} Z`;
@@ -266,7 +326,20 @@ export const WaterQualityMiniSparkline: React.FC = () => {
         </linearGradient>
       </defs>
       <path d={area} fill="url(#wqMiniGrad)" />
-      <polyline fill="none" stroke="#0284C7" strokeWidth="2" points={poly} />
+      <motion.path
+        d={linePath}
+        fill="none"
+        stroke="#0284C7"
+        strokeWidth="2"
+        strokeLinecap="round"
+        initial={effectiveReducedMotion ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={
+          effectiveReducedMotion
+            ? { duration: 0 }
+            : { duration: 0.7, ease: EASE_OUT }
+        }
+      />
     </svg>
   );
 };

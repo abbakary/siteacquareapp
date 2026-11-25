@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   LayoutDashboard,
   Waves,
@@ -26,22 +27,58 @@ import {
   TrendingUp,
   Leaf,
   CheckCircle2,
+  Sun,
+  Moon,
+  Monitor,
+  Plus,
+  WifiOff,
+  RefreshCw,
+  RotateCcw,
+  Boxes,
 } from 'lucide-react';
+import { DURATIONS, EASE_OUT, SPRING_SNAPPY, fadeUp, usePreferences } from './ui';
 import {
   AquacultureState,
+  Customer,
+  HarvestLot,
   Language,
   NavSection,
-  OperationType,
+  Payment,
+  PaymentMethod,
   Pond,
+  PreOrder,
+  PriceListItem,
+  Sale,
+  SaleLine,
 } from './types/aquaculture';
 import { ASSET_IMAGES, INITIAL_STATE } from './data/seedData';
 import { TRANSLATIONS } from './i18n/translations';
 import { nowTimestamp, todayIso } from './utils/formatters';
 import { getPermissions } from './utils/rbac';
+import {
+  formatInvoiceNo,
+  formatLotCode,
+  getCustomerOutstandingBalance,
+  getLotRemainingForGrade,
+  migrateAquacultureState,
+  normalizeTzPhone,
+  roundKg,
+  roundTzs,
+} from './utils/sales';
 import { DashboardView } from './components/DashboardView';
-import { PondQrModal, QuickActionModals, QuickActionType } from './components/QuickActionModals';
+import {
+  AddInventoryPayload,
+  PondQrModal,
+  QuickActionModals,
+  QuickActionType,
+} from './components/QuickActionModals';
 import { FarmPondsModule } from './components/modules/FarmPondsModule';
 import { FishSpeciesModule } from './components/modules/FishSpeciesModule';
+import {
+  FishStockModule,
+  ManualPondStockPayload,
+  ManualStockLotPayload,
+} from './components/modules/FishStockModule';
 import {
   FeedingModule,
   FishHealthModule,
@@ -50,11 +87,17 @@ import {
 import {
   EmployeesAccountabilityModule,
   FinanceReportsModule,
-  HarvestSalesModule,
   InventoryModule,
   SettingsHelpModule,
   TasksAlertsModule,
 } from './components/modules/CommerceAccountabilityModule';
+import { SalesModule } from './components/sales/SalesModule';
+import {
+  QuickSaleFlow,
+  QuickSaleSubmitPayload,
+  QuickSaleSubmitResult,
+} from './components/sales/QuickSaleFlow';
+import { InvoiceReceiptModal } from './components/sales/InvoiceReceiptModal';
 import { AquaIntelligenceView } from './components/modules/AquaIntelligenceView';
 
 const STORAGE_KEY = 'dukaaqusmart_state_v1';
@@ -65,11 +108,7 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as Partial<AquacultureState>;
-        return {
-          ...INITIAL_STATE,
-          ...parsed,
-          stockPurchases: parsed.stockPurchases ?? INITIAL_STATE.stockPurchases,
-        };
+        return migrateAquacultureState(parsed, INITIAL_STATE);
       }
     } catch {
       // ignore storage errors
@@ -81,12 +120,56 @@ export default function App() {
   const [language, setLanguage] = useState<Language>('en');
   const [selectedFarmId, setSelectedFarmId] = useState<string>('farm-dsm');
   const [quickAction, setQuickAction] = useState<QuickActionType>(null);
+  const [inventoryInitialItemId, setInventoryInitialItemId] = useState<string | null>(null);
+  const [harvestInitialPondCode, setHarvestInitialPondCode] = useState<string | null>(null);
+  const [quickSaleOpen, setQuickSaleOpen] = useState(false);
+  const [quickSaleInitialLotId, setQuickSaleInitialLotId] = useState<string | undefined>(undefined);
+  const [quickSaleInitialPondCode, setQuickSaleInitialPondCode] = useState<string | undefined>(undefined);
+  const [quickSalePreOrder, setQuickSalePreOrder] = useState<PreOrder | null>(null);
+  const [activeReceiptSaleId, setActiveReceiptSaleId] = useState<string | null>(null);
   const [selectedPondQr, setSelectedPondQr] = useState<Pond | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [toastState, setToastState] = useState<{
+    id: number;
+    message: string;
+    undoSnapshot?: AquacultureState;
+    undoCloseReceipt?: boolean;
+  } | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const inFlightSaleKeysRef = useRef<Set<string>>(new Set());
+  const committedSaleKeysRef = useRef<Set<string>>(new Set());
+
+  const { themeMode, cycleThemeMode, effectiveReducedMotion, triggerHaptic } = usePreferences();
+
+  const activeReceiptSale =
+    activeReceiptSaleId ? state.sales.find((s) => s.id === activeReceiptSaleId) || null : null;
+
+  const openQuickSaleModal = (opts?: { lotId?: string; pondCode?: string; preOrder?: PreOrder }) => {
+    setFabOpen(false);
+    setQuickSaleInitialLotId(opts?.lotId);
+    setQuickSaleInitialPondCode(opts?.pondCode);
+    setQuickSalePreOrder(opts?.preOrder || null);
+    setQuickSaleOpen(true);
+  };
+
+  const openInventoryModal = (itemId?: string | null) => {
+    setFabOpen(false);
+    setInventoryInitialItemId(itemId || null);
+    setQuickAction('inventory');
+  };
+
+  const openHarvestModal = (pondCode?: string | null) => {
+    setFabOpen(false);
+    setHarvestInitialPondCode(pondCode || null);
+    setQuickAction('harvest');
+  };
 
   useEffect(() => {
     try {
@@ -96,9 +179,56 @@ export default function App() {
     }
   }, [state]);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3500);
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const showToast = (
+    message: string,
+    opts?: { undoSnapshot?: AquacultureState; undoCloseReceipt?: boolean }
+  ) => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    const id = Date.now();
+    setToastState({
+      id,
+      message,
+      undoSnapshot: opts?.undoSnapshot,
+      undoCloseReceipt: opts?.undoCloseReceipt,
+    });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastState(null);
+    }, opts?.undoSnapshot ? 5500 : 3500);
+  };
+
+  const handleUndoToast = () => {
+    if (!toastState?.undoSnapshot) return;
+    setState(toastState.undoSnapshot);
+    if (toastState.undoCloseReceipt) {
+      setActiveReceiptSaleId(null);
+    }
+    triggerHaptic(8);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToastState({ id: Date.now(), message: TRANSLATIONS[language].ui.undone });
+    toastTimerRef.current = window.setTimeout(() => setToastState(null), 2400);
+  };
+
+  const handleSyncNow = () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncProgress(25);
+    window.setTimeout(() => setSyncProgress(72), 240);
+    window.setTimeout(() => {
+      setSyncProgress(100);
+      setState((prev) => ({ ...prev, pendingSyncQueue: [] }));
+      triggerHaptic(10);
+      showToast('All queued farm records synced.');
+      window.setTimeout(() => {
+        setIsSyncing(false);
+        setSyncProgress(0);
+      }, 220);
+    }, 620);
   };
 
   const t = TRANSLATIONS[language];
@@ -106,6 +236,16 @@ export default function App() {
   const openTasksAlertsCount =
     state.tasks.filter((tk) => tk.status === 'Pending').length +
     state.alerts.filter((al) => !al.acknowledged).length;
+
+  const prevAlertsCountRef = useRef<number>(openTasksAlertsCount);
+  const [bellPulseKey, setBellPulseKey] = useState(0);
+
+  useEffect(() => {
+    if (openTasksAlertsCount > prevAlertsCountRef.current) {
+      setBellPulseKey((k) => k + 1);
+    }
+    prevAlertsCountRef.current = openTasksAlertsCount;
+  }, [openTasksAlertsCount]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -152,8 +292,9 @@ export default function App() {
     pin: string;
   }) => {
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: `Invalid PIN. Please enter ${state.activeUser.pin} for ${state.activeUser.name}.` };
+      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
     }
+    const prevSnapshot = state;
     const variance = Number(Math.abs(payload.issuedKg - payload.actualFedKg).toFixed(2));
     const varianceFlagged = variance > 0.5;
 
@@ -177,7 +318,7 @@ export default function App() {
           storekeeper: 'Grace M. Shayo',
           keeper: prev.activeUser.name,
           status: varianceFlagged ? 'Variance Flagged' : 'Fed & Reconciled',
-          signedPinHash: `PIN-${payload.pin}-OK`,
+          signedPinHash: `SIGNED-${prev.activeUser.id}-${Date.now()}`,
         },
         ...prev.feedIssuances,
       ],
@@ -230,78 +371,122 @@ export default function App() {
         ...prev.auditLogs,
       ],
     }));
-    showToast(`Feeding logged for ${payload.pondCode} (${payload.actualFedKg} kg).`);
+    triggerHaptic(10);
+    showToast(`Feeding logged for ${payload.pondCode} (${payload.actualFedKg} kg).`, {
+      undoSnapshot: prevSnapshot,
+    });
     return { ok: true };
   };
 
-  const handleAddInventory = (payload: {
-    name: string;
-    category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment';
-    quantity: number;
-    unit: string;
-    unitCostTzs: number;
-    supplier: string;
-  }) => {
-    const totalCost = payload.quantity * payload.unitCostTzs;
+  const handleAddInventory = (payload: AddInventoryPayload) => {
+    const totalCost = Math.round(payload.quantity * payload.unitCostTzs);
+    const finCategory =
+      payload.category === 'Feed'
+        ? ('Feed Purchase' as const)
+        : payload.category === 'Fingerlings'
+          ? ('Fingerling Purchase' as const)
+          : payload.category === 'Medicine'
+            ? ('Medicine & Treatments' as const)
+            : payload.category === 'Fuel'
+              ? ('Fuel & Electricity' as const)
+              : ('Equipment Maintenance' as const);
+    const finPaymentStatus =
+      payload.paymentStatus === 'Paid'
+        ? ('Paid' as const)
+        : payload.paymentStatus === 'Partial'
+          ? ('Partial' as const)
+          : ('Pending Debt' as const);
+
+    const prevSnapshot = state;
     setState((prev) => {
-      const existing = prev.inventory.find((i) => i.name.toLowerCase() === payload.name.toLowerCase());
+      const existing =
+        (payload.existingItemId
+          ? prev.inventory.find((i) => i.id === payload.existingItemId)
+          : undefined) ||
+        prev.inventory.find((i) => i.name.toLowerCase() === payload.name.toLowerCase());
+
+      const newItemId = existing?.id || `inv-${Date.now()}`;
       const updatedInventory = existing
-        ? prev.inventory.map((i) =>
-            i.id === existing.id
-              ? {
-                  ...i,
-                  stock: i.stock + payload.quantity,
-                  status: i.stock + payload.quantity <= i.reorderLevel ? ('Low Stock' as const) : ('In Stock' as const),
-                }
-              : i
-          )
+        ? prev.inventory.map((i) => {
+            if (i.id !== existing.id) return i;
+            const nextStock = i.stock + payload.quantity;
+            const nextReorder = payload.reorderLevel >= 0 ? payload.reorderLevel : i.reorderLevel;
+            return {
+              ...i,
+              name: payload.name,
+              sku: payload.sku || i.sku,
+              category: payload.category,
+              stock: nextStock,
+              unit: payload.unit,
+              reorderLevel: nextReorder,
+              unitCostTzs: payload.unitCostTzs,
+              batchOrLot: payload.lotNumber,
+              expiryDate: payload.expiryDate || i.expiryDate,
+              supplier: payload.supplier,
+              lastRestockedDate: payload.purchaseDate,
+              notes: payload.notes || i.notes,
+              status: nextStock <= nextReorder ? ('Low Stock' as const) : ('In Stock' as const),
+            };
+          })
         : [
             {
-              id: `inv-${Date.now()}`,
+              id: newItemId,
+              sku: payload.sku || `SKU-${Date.now().toString().slice(-4)}`,
               name: payload.name,
               category: payload.category,
               stock: payload.quantity,
               unit: payload.unit,
-              reorderLevel: 50,
+              reorderLevel: payload.reorderLevel,
               unitCostTzs: payload.unitCostTzs,
-              batchOrLot: `LOT-${Date.now().toString().slice(-4)}`,
+              batchOrLot: payload.lotNumber,
+              expiryDate: payload.expiryDate,
               supplier: payload.supplier,
-              status: 'In Stock' as const,
+              lastRestockedDate: payload.purchaseDate,
+              notes: payload.notes,
+              status:
+                payload.quantity <= payload.reorderLevel ? ('Low Stock' as const) : ('In Stock' as const),
             },
             ...prev.inventory,
           ];
 
-      const lotNumber = `LOT-${Date.now().toString().slice(-4)}`;
       return {
         ...prev,
         inventory: updatedInventory,
         stockPurchases: [
           {
             id: `pur-${Date.now()}`,
-            date: todayIso(),
+            itemId: newItemId,
+            date: payload.purchaseDate,
             itemName: payload.name,
             category: payload.category,
             quantity: payload.quantity,
             unit: payload.unit,
             unitCostTzs: payload.unitCostTzs,
             totalCostTzs: totalCost,
+            paidAmountTzs: payload.paidAmountTzs,
             supplier: payload.supplier,
-            lotNumber,
-            paymentStatus: 'Paid',
+            supplierPhone: payload.supplierPhone,
+            invoiceNo: payload.invoiceNo,
+            lotNumber: payload.lotNumber,
+            expiryDate: payload.expiryDate,
+            paymentStatus: payload.paymentStatus,
             recordedBy: prev.activeUser.name,
+            notes: payload.notes,
           },
           ...(prev.stockPurchases || []),
         ],
         finances: [
           {
             id: `fin-${Date.now()}`,
-            date: todayIso(),
+            date: payload.purchaseDate,
             type: 'Expense',
-            category: payload.category === 'Feed' ? 'Feed Purchase' : 'Equipment Maintenance',
-            description: `Purchase added – ${payload.name} (${payload.quantity} ${payload.unit})`,
+            category: finCategory,
+            description: `${existing ? 'Restocked' : 'New item'} – ${payload.name} (${payload.quantity} ${payload.unit})${
+              payload.invoiceNo ? ` · Inv ${payload.invoiceNo}` : ''
+            }`,
             amountTzs: totalCost,
             counterparty: payload.supplier,
-            paymentStatus: 'Paid',
+            paymentStatus: finPaymentStatus,
           },
           ...prev.finances,
         ],
@@ -309,15 +494,32 @@ export default function App() {
           {
             id: `act-${Date.now()}`,
             kind: 'purchase',
-            title: `Purchase added – ${payload.name}`,
-            subtitle: `${payload.quantity} ${payload.unit} from ${payload.supplier}`,
+            title: `${existing ? 'Restocked' : 'Purchase added'} – ${payload.name}`,
+            subtitle: `${payload.quantity} ${payload.unit} (${formatTzsInline(totalCost)}) from ${payload.supplier}`,
             timeAgo: 'Just now',
           },
           ...prev.activities,
         ],
+        auditLogs: [
+          {
+            id: `aud-${Date.now()}`,
+            timestamp: nowTimestamp(),
+            actorName: prev.activeUser.name,
+            actorRole: prev.activeUser.role,
+            module: 'Inventory & Procurement',
+            action: existing ? 'Existing Inventory Restocked' : 'New Inventory Product Purchased',
+            details: `${payload.name} (+${payload.quantity} ${payload.unit} @ TZS ${payload.unitCostTzs.toLocaleString()}) from ${payload.supplier}. Lot: ${payload.lotNumber}. Status: ${payload.paymentStatus}.`,
+            pinVerified: false,
+          },
+          ...prev.auditLogs,
+        ],
       };
     });
-    showToast(`Added ${payload.quantity} ${payload.unit} of ${payload.name} to inventory.`);
+    triggerHaptic(10);
+    showToast(
+      `Saved ${payload.quantity} ${payload.unit} of ${payload.name} (${payload.paymentStatus}).`,
+      { undoSnapshot: prevSnapshot }
+    );
   };
 
   const handleRecordWater = (payload: {
@@ -403,7 +605,7 @@ export default function App() {
       return { ok: false, error: `Role ${state.activeUser.roleLabel} does not report pond mortality.` };
     }
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: `Invalid PIN. Expected ${state.activeUser.pin}.` };
+      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
     }
     const batch = state.batches.find((b) => b.pondCode === payload.pondCode);
     const wq = state.waterReadings.find((w) => w.pondCode === payload.pondCode);
@@ -482,76 +684,123 @@ export default function App() {
     mediumKg: number;
     smallCount: number;
     smallKg: number;
-    customerName: string;
-    pricePerKgTzs: number;
-    paidAmountTzs: number;
+    damagedKg: number;
+    notes: string;
     pin: string;
-  }) => {
-    if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: `Invalid PIN. Expected ${state.activeUser.pin}.` };
+  }): { ok: boolean; lotId?: string; error?: string } => {
+    const perms = getPermissions(state.activeUser.role);
+    if (!perms.canApproveHarvest) {
+      return {
+        ok: false,
+        error: `Role ${state.activeUser.roleLabel} cannot approve harvests. Switch to Owner or Farm Manager.`,
+      };
     }
-    const totalCount = payload.largeCount + payload.mediumCount + payload.smallCount;
-    const totalKg = payload.largeKg + payload.mediumKg + payload.smallKg;
-    const totalAmount = totalKg * payload.pricePerKgTzs;
-    const pond = state.ponds.find((p) => p.code === payload.pondCode);
-    const batch = state.batches.find((b) => b.pondCode === payload.pondCode);
+    if (payload.pin !== state.activeUser.pin) {
+      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+    }
 
+    const pond = state.ponds.find((p) => p.code === payload.pondCode);
+    if (!pond) {
+      return { ok: false, error: 'Selected pond was not found.' };
+    }
+
+    const totalCount =
+      Math.max(0, Math.round(payload.largeCount)) +
+      Math.max(0, Math.round(payload.mediumCount)) +
+      Math.max(0, Math.round(payload.smallCount));
+    const totalKg = roundKg(
+      Math.max(0, payload.largeKg) + Math.max(0, payload.mediumKg) + Math.max(0, payload.smallKg)
+    );
+    const damagedKg = roundKg(Math.max(0, payload.damagedKg || 0));
+
+    if (totalKg <= 0 || totalCount <= 0) {
+      return { ok: false, error: 'Enter graded fish counts and weights greater than 0.' };
+    }
+    if (totalCount > pond.currentFish) {
+      return {
+        ok: false,
+        error: `Harvest count (${totalCount.toLocaleString()}) exceeds live fish in ${pond.code} (${pond.currentFish.toLocaleString()}).`,
+      };
+    }
+
+    const batch = state.batches.find(
+      (b) => b.pondCode === payload.pondCode && b.status !== 'Completed'
+    ) || state.batches.find((b) => b.pondCode === payload.pondCode);
+
+    const lotId = `lot-${Date.now()}`;
+    const lotCode = formatLotCode(state.harvestLots.length + 1, todayIso());
+    const newLot: HarvestLot = {
+      id: lotId,
+      lotCode,
+      date: todayIso(),
+      pondCode: payload.pondCode,
+      batchCode: batch?.batchCode || 'UNASSIGNED',
+      species: pond.species,
+      grades: {
+        largeKg: roundKg(payload.largeKg),
+        largeCount: Math.round(payload.largeCount),
+        mediumKg: roundKg(payload.mediumKg),
+        mediumCount: Math.round(payload.mediumCount),
+        smallKg: roundKg(payload.smallKg),
+        smallCount: Math.round(payload.smallCount),
+        damagedKg,
+      },
+      remainingKg: {
+        large: roundKg(payload.largeKg),
+        medium: roundKg(payload.mediumKg),
+        small: roundKg(payload.smallKg),
+      },
+      remainingCount: {
+        large: Math.round(payload.largeCount),
+        medium: Math.round(payload.mediumCount),
+        small: Math.round(payload.smallCount),
+      },
+      approvedBy: prevUserName(state),
+      notes: payload.notes.trim() || undefined,
+    };
+
+    const prevSnapshot = state;
     setState((prev) => ({
       ...prev,
-      harvests: [
-        {
-          id: `harv-${Date.now()}`,
-          date: todayIso(),
-          pondCode: payload.pondCode,
-          batchCode: batch?.batchCode || 'BATCH',
-          species: pond?.species || 'Nile Tilapia',
-          totalFishHarvested: totalCount,
-          totalWeightKg: totalKg,
-          grades: {
-            largeCount: payload.largeCount,
-            largeKg: payload.largeKg,
-            mediumCount: payload.mediumCount,
-            mediumKg: payload.mediumKg,
-            smallCount: payload.smallCount,
-            smallKg: payload.smallKg,
-            damagedKg: 0,
-          },
-          customerName: payload.customerName,
-          customerPhone: '+255 712 000 111',
-          pricePerKgTzs: payload.pricePerKgTzs,
-          totalAmountTzs: totalAmount,
-          paidAmountTzs: payload.paidAmountTzs,
-          deliveryStatus: 'Delivered',
-          approvedBy: prev.activeUser.name,
-        },
-        ...prev.harvests,
-      ],
-      ponds: prev.ponds.map((p) =>
-        p.code === payload.pondCode
-          ? { ...p, currentFish: Math.max(0, p.currentFish - totalCount) }
-          : p
-      ),
-      finances: [
-        {
-          id: `fin-${Date.now()}`,
-          date: todayIso(),
-          type: 'Revenue',
-          category: 'Harvest Sales',
-          description: `Harvest sale – ${totalKg} kg (${payload.pondCode})`,
-          pondCode: payload.pondCode,
-          batchCode: batch?.batchCode,
-          amountTzs: totalAmount,
-          counterparty: payload.customerName,
-          paymentStatus: payload.paidAmountTzs >= totalAmount ? 'Paid' : 'Partial',
-        },
-        ...prev.finances,
-      ],
+      harvestLots: [newLot, ...prev.harvestLots],
+      ponds: prev.ponds.map((p) => {
+        if (p.code !== payload.pondCode) return p;
+        const nextFish = Math.max(0, p.currentFish - totalCount);
+        return {
+          ...p,
+          currentFish: nextFish,
+          status: nextFish === 0 ? 'Preparing' : p.status,
+          readinessPct: nextFish === 0 ? 0 : p.readinessPct,
+        };
+      }),
+      batches: prev.batches.map((b) => {
+        if (batch && b.id !== batch.id) return b;
+        if (!batch && b.pondCode !== payload.pondCode) return b;
+        const remaining = Math.max(0, b.currentEstimatedFish - totalCount);
+        const nextStatus = remaining === 0 ? ('Completed' as const) : ('Partial Harvest' as const);
+        return {
+          ...b,
+          currentEstimatedFish: remaining,
+          status: nextStatus,
+          history: [
+            ...b.history,
+            {
+              id: `ev-${Date.now()}`,
+              step: b.history.length + 1,
+              title: `${nextStatus} (${lotCode})`,
+              detail: `Harvested ${totalCount.toLocaleString()} fish (${totalKg.toFixed(1)} kg graded into chilled lot ${lotCode}; ${remaining.toLocaleString()} remaining in pond).`,
+              date: todayIso(),
+              actor: prev.activeUser.name,
+            },
+          ],
+        };
+      }),
       activities: [
         {
           id: `act-${Date.now()}`,
           kind: 'harvest',
-          title: `Harvest completed – ${payload.pondCode}`,
-          subtitle: `${totalKg} kg sold to ${payload.customerName}`,
+          title: `Harvest lot ${lotCode} graded – ${payload.pondCode}`,
+          subtitle: `${totalKg.toFixed(1)} kg (${totalCount.toLocaleString()} fish) ready for sales`,
           timeAgo: 'Just now',
         },
         ...prev.activities,
@@ -563,15 +812,945 @@ export default function App() {
           actorName: prev.activeUser.name,
           actorRole: prev.activeUser.role,
           module: 'Harvest & Sales',
-          action: 'Harvest Approved & Invoice Generated',
-          details: `${payload.pondCode}: ${totalCount} fish (${totalKg} kg) sold for TZS ${totalAmount.toLocaleString()}.`,
+          action: 'Harvest Lot Graded & Stocked',
+          details: `${lotCode} (${payload.pondCode}): ${totalCount.toLocaleString()} fish (${totalKg.toFixed(1)} kg + ${damagedKg} kg damaged). Ready for multi-customer dispatch.`,
           pinVerified: true,
         },
         ...prev.auditLogs,
       ],
     }));
-    showToast(`Harvest recorded for ${payload.pondCode} (${totalKg} kg).`);
+    triggerHaptic(10);
+    showToast(`Harvest lot ${lotCode} saved (${totalKg.toFixed(1)} kg ready to sell).`, {
+      undoSnapshot: prevSnapshot,
+    });
+    return { ok: true, lotId };
+  };
+
+  // --- FISH STOCK MODULE HANDLERS (MANUAL LOT + POND STOCKING) ---
+  const handleCreateManualStockLot = (
+    payload: ManualStockLotPayload
+  ): { ok: boolean; lotId?: string; error?: string } => {
+    const perms = getPermissions(state.activeUser.role);
+    if (!perms.canApproveHarvest && !perms.canRecordSale) {
+      return {
+        ok: false,
+        error: `Role ${state.activeUser.roleLabel} cannot create manual fish stock lots.`,
+      };
+    }
+    if (payload.pin !== state.activeUser.pin) {
+      return { ok: false, error: 'Invalid 4-digit approval PIN.' };
+    }
+
+    const totalCount =
+      Math.max(0, Math.round(payload.largeCount)) +
+      Math.max(0, Math.round(payload.mediumCount)) +
+      Math.max(0, Math.round(payload.smallCount));
+    const totalKg = roundKg(
+      Math.max(0, payload.largeKg) + Math.max(0, payload.mediumKg) + Math.max(0, payload.smallKg)
+    );
+    if (totalKg <= 0) {
+      return { ok: false, error: 'Enter graded stock weight greater than 0 kg.' };
+    }
+
+    const sourcePond =
+      payload.pondCode !== 'EXTERNAL'
+        ? state.ponds.find((p) => p.code === payload.pondCode)
+        : undefined;
+    if (payload.deductFromPond && sourcePond && totalCount > sourcePond.currentFish) {
+      return {
+        ok: false,
+        error: `Fish count (${totalCount.toLocaleString()}) exceeds live fish in ${sourcePond.code} (${sourcePond.currentFish.toLocaleString()}).`,
+      };
+    }
+
+    const lotId = `lot-man-${Date.now()}`;
+    const lotCode = formatLotCode(state.harvestLots.length + 1, todayIso());
+    const newLot: HarvestLot = {
+      id: lotId,
+      lotCode,
+      date: todayIso(),
+      pondCode: payload.pondCode,
+      batchCode: payload.batchCode || 'MANUAL',
+      species: payload.species,
+      source: 'Manual Stock',
+      grades: {
+        largeKg: roundKg(payload.largeKg),
+        largeCount: Math.round(payload.largeCount),
+        mediumKg: roundKg(payload.mediumKg),
+        mediumCount: Math.round(payload.mediumCount),
+        smallKg: roundKg(payload.smallKg),
+        smallCount: Math.round(payload.smallCount),
+        damagedKg: 0,
+      },
+      remainingKg: {
+        large: roundKg(payload.largeKg),
+        medium: roundKg(payload.mediumKg),
+        small: roundKg(payload.smallKg),
+      },
+      remainingCount: {
+        large: Math.round(payload.largeCount),
+        medium: Math.round(payload.mediumCount),
+        small: Math.round(payload.smallCount),
+      },
+      approvedBy: state.activeUser.name,
+      notes: payload.notes || 'Manual stock entry',
+    };
+
+    const prevSnapshot = state;
+    setState((prev) => ({
+      ...prev,
+      harvestLots: [newLot, ...prev.harvestLots],
+      ponds:
+        payload.deductFromPond && sourcePond && totalCount > 0
+          ? prev.ponds.map((p) => {
+              if (p.code !== sourcePond.code) return p;
+              const nextFish = Math.max(0, p.currentFish - totalCount);
+              return {
+                ...p,
+                currentFish: nextFish,
+                status: nextFish === 0 ? 'Preparing' : p.status,
+              };
+            })
+          : prev.ponds,
+      batches:
+        payload.deductFromPond && sourcePond && totalCount > 0
+          ? prev.batches.map((b) => {
+              if (b.pondCode !== sourcePond.code || b.status === 'Completed') return b;
+              const rem = Math.max(0, b.currentEstimatedFish - totalCount);
+              return {
+                ...b,
+                currentEstimatedFish: rem,
+                status: rem === 0 ? ('Completed' as const) : ('Partial Harvest' as const),
+              };
+            })
+          : prev.batches,
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          kind: 'harvest',
+          title: `Manual fish stock ${lotCode} added`,
+          subtitle: `${totalKg.toFixed(1)} kg ${payload.species} (${payload.pondCode})`,
+          timeAgo: 'Just now',
+        },
+        ...prev.activities,
+      ],
+      auditLogs: [
+        {
+          id: `aud-${Date.now()}`,
+          timestamp: nowTimestamp(),
+          actorName: prev.activeUser.name,
+          actorRole: prev.activeUser.role,
+          module: 'Fish Stock Control',
+          action: 'Manual Graded Stock Lot Created',
+          details: `${lotCode}: ${totalKg.toFixed(1)} kg ${payload.species} from ${payload.pondCode}${
+            payload.deductFromPond && totalCount > 0 ? ` (deducted ${totalCount} fish)` : ''
+          }.`,
+          pinVerified: true,
+        },
+        ...prev.auditLogs,
+      ],
+    }));
+
+    triggerHaptic(10);
+    showToast(`Manual stock lot ${lotCode} saved (${totalKg.toFixed(1)} kg).`, {
+      undoSnapshot: prevSnapshot,
+    });
+    return { ok: true, lotId };
+  };
+
+  const handleRegisterPondStock = (
+    payload: ManualPondStockPayload
+  ): { ok: boolean; error?: string } => {
+    const pond = state.ponds.find((p) => p.code === payload.pondCode);
+    if (!pond) return { ok: false, error: 'Selected pond was not found.' };
+    if (pond.currentFish + payload.fishCount > pond.maxCapacity) {
+      return {
+        ok: false,
+        error: `Capacity guard: ${pond.code} max capacity is ${pond.maxCapacity.toLocaleString()} fish (available space: ${(
+          pond.maxCapacity - pond.currentFish
+        ).toLocaleString()}).`,
+      };
+    }
+
+    const sp = state.speciesCatalogue.find((s) => s.commonName === payload.species);
+    const codePrefix = payload.species.toLowerCase().includes('catfish') ? 'CAT' : 'TIL';
+    const batchCode = `${codePrefix}-2026-${String(state.batches.length + 1).padStart(3, '0')}`;
+    const prevSnapshot = state;
+
+    setState((prev) => ({
+      ...prev,
+      ponds: prev.ponds.map((p) =>
+        p.id === pond.id
+          ? {
+              ...p,
+              species: payload.species,
+              currentFish: p.currentFish + payload.fishCount,
+              status: 'Healthy',
+              readinessPct: Math.max(p.readinessPct, 25),
+            }
+          : p
+      ),
+      batches: [
+        {
+          id: `batch-${Date.now()}`,
+          batchCode,
+          species: payload.species,
+          scientificName: sp?.scientificName || 'Oreochromis niloticus',
+          sourceHatchery: payload.sourceHatchery || 'Farm Hatchery Stock',
+          supplier: payload.supplier || 'Internal Stocking',
+          pondId: pond.id,
+          pondCode: pond.code,
+          initialStocking: payload.fishCount,
+          currentEstimatedFish: payload.fishCount,
+          physicallyVerifiedFish: payload.fishCount,
+          lastVerifiedDate: todayIso(),
+          avgInitialWeightG: payload.avgWeightG,
+          currentAvgWeightG: payload.avgWeightG,
+          stockingDate: todayIso(),
+          plannedHarvestDate: '2027-05-15',
+          responsibleKeeper: prev.activeUser.name,
+          status: 'Growing',
+          feedConsumedKg: 0,
+          totalMortality: 0,
+          history: [
+            {
+              id: `ev-${Date.now()}`,
+              step: 1,
+              title: 'Live pond stock registered',
+              detail: `${payload.fishCount.toLocaleString()} ${payload.species} (${payload.avgWeightG}g avg) stocked into ${pond.code}${
+                payload.notes ? ` — ${payload.notes}` : ''
+              }.`,
+              date: todayIso(),
+              actor: prev.activeUser.name,
+            },
+          ],
+        },
+        ...prev.batches,
+      ],
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          kind: 'purchase',
+          title: `Pond stock added – ${pond.code}`,
+          subtitle: `+${payload.fishCount.toLocaleString()} ${payload.species} (${payload.avgWeightG}g avg)`,
+          timeAgo: 'Just now',
+        },
+        ...prev.activities,
+      ],
+      auditLogs: [
+        {
+          id: `aud-${Date.now()}`,
+          timestamp: nowTimestamp(),
+          actorName: prev.activeUser.name,
+          actorRole: prev.activeUser.role,
+          module: 'Fish Stock Control',
+          action: 'Live Pond Fish Stocked',
+          details: `Added ${payload.fishCount.toLocaleString()} ${payload.species} (${payload.avgWeightG}g avg) to ${pond.code} as batch ${batchCode}.`,
+          pinVerified: false,
+        },
+        ...prev.auditLogs,
+      ],
+    }));
+
+    triggerHaptic(10);
+    showToast(`Added ${payload.fishCount.toLocaleString()} fish to ${pond.code} (${batchCode}).`, {
+      undoSnapshot: prevSnapshot,
+    });
     return { ok: true };
+  };
+
+  // --- SALES & CUSTOMERS HANDLERS (PHASE 1) ---
+  const handleQuickCreateCustomer = (payload: {
+    name: string;
+    phone: string;
+  }): { ok: boolean; customer?: Customer; error?: string } => {
+    const normalized = normalizeTzPhone(payload.phone);
+    if (!payload.name.trim()) {
+      return { ok: false, error: 'Customer name is required.' };
+    }
+    if (!normalized) {
+      return { ok: false, error: 'Valid Tanzania phone required (e.g. 255712345678).' };
+    }
+    const existing = state.customers.find((c) => c.phone === normalized);
+    if (existing) {
+      return { ok: true, customer: existing };
+    }
+    const customer: Customer = {
+      id: `cust-${Date.now()}`,
+      name: payload.name.trim(),
+      phone: normalized,
+      type: 'Individual',
+      location: 'Dar es Salaam',
+      priceTier: 'Standard',
+      creditLimitTzs: 500000,
+      paymentTermsDays: 7,
+      notes: 'Quick-added during field sale',
+      createdAt: todayIso(),
+    };
+    setState((prev) => ({
+      ...prev,
+      customers: [customer, ...prev.customers],
+    }));
+    showToast(`Added customer ${customer.name}`);
+    return { ok: true, customer };
+  };
+
+  const handleAddCustomer = (
+    payload: Omit<Customer, 'id' | 'createdAt'>
+  ): { ok: boolean; error?: string } => {
+    const perms = getPermissions(state.activeUser.role);
+    if (!perms.canManageCustomers && !perms.canRecordSale) {
+      return { ok: false, error: 'Your role cannot register customers.' };
+    }
+    const normalized = normalizeTzPhone(payload.phone);
+    if (!normalized) {
+      return { ok: false, error: 'Valid Tanzania phone required (255XXXXXXXXX).' };
+    }
+    if (state.customers.some((c) => c.phone === normalized)) {
+      return { ok: false, error: 'A customer with this phone number already exists.' };
+    }
+    const newCust: Customer = {
+      ...payload,
+      phone: normalized,
+      id: `cust-${Date.now()}`,
+      createdAt: todayIso(),
+    };
+    setState((prev) => ({
+      ...prev,
+      customers: [newCust, ...prev.customers],
+      auditLogs: [
+        {
+          id: `aud-${Date.now()}`,
+          timestamp: nowTimestamp(),
+          actorName: prev.activeUser.name,
+          actorRole: prev.activeUser.role,
+          module: 'Sales & CRM',
+          action: 'Customer Registered',
+          details: `${newCust.name} (${newCust.type}, ${newCust.priceTier}, credit limit ${newCust.creditLimitTzs.toLocaleString()} TZS).`,
+          pinVerified: false,
+        },
+        ...prev.auditLogs,
+      ],
+    }));
+    showToast(`Customer ${newCust.name} registered.`);
+    return { ok: true };
+  };
+
+  const handleUpdateCustomer = (id: string, patch: Partial<Customer>) => {
+    setState((prev) => ({
+      ...prev,
+      customers: prev.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    }));
+    showToast('Customer profile updated.');
+  };
+
+  const handleSavePriceItem = (payload: Omit<PriceListItem, 'id'> & { id?: string }) => {
+    setState((prev) => {
+      const exists = payload.id
+        ? prev.priceList.some((p) => p.id === payload.id)
+        : prev.priceList.some(
+            (p) =>
+              p.species === payload.species && p.grade === payload.grade && p.tier === payload.tier
+          );
+      const nextList = exists
+        ? prev.priceList.map((p) =>
+            p.id === payload.id ||
+            (p.species === payload.species && p.grade === payload.grade && p.tier === payload.tier)
+              ? { ...p, pricePerKgTzs: roundTzs(payload.pricePerKgTzs), validFrom: payload.validFrom }
+              : p
+          )
+        : [{ ...payload, id: `pl-${Date.now()}`, pricePerKgTzs: roundTzs(payload.pricePerKgTzs) }, ...prev.priceList];
+      return {
+        ...prev,
+        priceList: nextList,
+        auditLogs: [
+          {
+            id: `aud-${Date.now()}`,
+            timestamp: nowTimestamp(),
+            actorName: prev.activeUser.name,
+            actorRole: prev.activeUser.role,
+            module: 'Sales & Pricing',
+            action: 'Price List Updated',
+            details: `${payload.species} (${payload.grade} / ${payload.tier}) set to TZS ${roundTzs(payload.pricePerKgTzs).toLocaleString()}/kg.`,
+            pinVerified: false,
+          },
+          ...prev.auditLogs,
+        ],
+      };
+    });
+    showToast('Price list updated.');
+  };
+
+  const handleCreateQuickSale = async (
+    payload: QuickSaleSubmitPayload
+  ): Promise<QuickSaleSubmitResult> => {
+    const idempotencyKey = (payload.idempotencyKey || '').trim();
+    if (!idempotencyKey) {
+      return { ok: false, error: 'Missing transaction key. Re-open Quick Sale and try again.' };
+    }
+
+    if (
+      inFlightSaleKeysRef.current.has(idempotencyKey) ||
+      committedSaleKeysRef.current.has(idempotencyKey) ||
+      state.sales.some((s) => s.idempotencyKey === idempotencyKey)
+    ) {
+      return {
+        ok: false,
+        duplicate: true,
+        error: 'Duplicate submission prevented: this sale has already been submitted.',
+      };
+    }
+
+    const perms = getPermissions(state.activeUser.role);
+    if (!perms.canRecordSale) {
+      return {
+        ok: false,
+        error: `Role ${state.activeUser.roleLabel} cannot record sales.`,
+      };
+    }
+
+    const customer = state.customers.find((c) => c.id === payload.customerId);
+    if (!customer) {
+      return { ok: false, error: 'Selected customer not found.' };
+    }
+    if (!normalizeTzPhone(customer.phone)) {
+      return { ok: false, error: 'Customer phone must be a valid 255XXXXXXXXX number.' };
+    }
+    if (payload.lines.length === 0) {
+      return { ok: false, error: 'Add at least one weighing line.' };
+    }
+
+    const subtotalTzs = roundTzs(
+      payload.lines.reduce((sum, l) => sum + roundTzs(roundKg(l.kg) * roundTzs(l.pricePerKgTzs)), 0)
+    );
+    const discountTzs = Math.max(0, roundTzs(payload.discountTzs));
+    if (discountTzs > subtotalTzs) {
+      return { ok: false, error: 'Discount cannot exceed subtotal.' };
+    }
+    if (discountTzs > 0 && !perms.canOverrideSalePrice) {
+      return { ok: false, error: 'Only Owner or Farm Manager can approve discounts.' };
+    }
+    if (discountTzs > 0 && !payload.discountReason.trim()) {
+      return { ok: false, error: 'Discount reason is required.' };
+    }
+
+    const taxableBase = Math.max(0, subtotalTzs - discountTzs);
+    const taxRatePct = payload.applyTax ? 18 : 0;
+    const taxTzs = payload.applyTax ? roundTzs(taxableBase * 0.18) : 0;
+    const totalTzs = roundTzs(taxableBase + taxTzs);
+
+    const paidTzs = roundTzs(payload.paidTzs);
+    if (paidTzs < 0 || paidTzs > totalTzs) {
+      return { ok: false, error: 'Paid amount must be between TZS 0 and invoice total.' };
+    }
+    const balanceTzs = roundTzs(totalTzs - paidTzs);
+
+    const existingDebt = getCustomerOutstandingBalance(state.sales, customer.id);
+    if (balanceTzs > 0 && existingDebt + balanceTzs > customer.creditLimitTzs) {
+      return {
+        ok: false,
+        error: `Credit limit exceeded for ${customer.name} (limit TZS ${customer.creditLimitTzs.toLocaleString()}).`,
+      };
+    }
+
+    const pinRequired = totalTzs >= state.salesPreferences.pinThresholdTzs || discountTzs > 0;
+    if (pinRequired && payload.pin !== state.activeUser.pin) {
+      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+    }
+
+    // Validate lot stock availability across lines referencing existing lots before contacting backend
+    const lotKgUsage: Record<string, { large: number; medium: number; small: number }> = {};
+    for (const line of payload.lines) {
+      const kg = roundKg(line.kg);
+      if (kg <= 0 || line.pricePerKgTzs <= 0) {
+        return { ok: false, error: 'All lines require weight > 0 and price > 0.' };
+      }
+      if (line.sourceType === 'lot' && line.lotId) {
+        const lot = state.harvestLots.find((l) => l.id === line.lotId);
+        if (!lot) return { ok: false, error: 'Selected harvest lot not found.' };
+        if (!lotKgUsage[lot.id]) lotKgUsage[lot.id] = { large: 0, medium: 0, small: 0 };
+        const key = line.grade.toLowerCase() as 'large' | 'medium' | 'small';
+        lotKgUsage[lot.id][key] = roundKg(lotKgUsage[lot.id][key] + kg);
+        const avail = getLotRemainingForGrade(lot, line.grade);
+        if (lotKgUsage[lot.id][key] > avail) {
+          return {
+            ok: false,
+            error: `Insufficient ${line.grade} stock in ${lot.lotCode} (${avail.toFixed(2)} kg available).`,
+          };
+        }
+      } else if (line.sourceType === 'pond') {
+        const pond = state.ponds.find((p) => p.code === line.pondCode);
+        if (!pond || pond.currentFish <= 0) {
+          return { ok: false, error: `No live fish available in ${line.pondCode}.` };
+        }
+      }
+    }
+
+    // Backend confirmation gate: stock deduction & harvest lot creation occur ONLY after 200 OK
+    inFlightSaleKeysRef.current.add(idempotencyKey);
+    let backendConfirmationId = '';
+    let verifiedTotals = {
+      subtotalTzs,
+      discountTzs,
+      taxRatePct,
+      taxTzs,
+      totalTzs,
+      paidTzs,
+      balanceTzs,
+    };
+
+    try {
+      const response = await fetch('/api/sales/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idempotencyKey,
+          customerId: customer.id,
+          customerPhone: customer.phone,
+          lines: payload.lines,
+          discountTzs,
+          discountReason: payload.discountReason.trim(),
+          applyTax: payload.applyTax,
+          paidTzs,
+          paymentMethod: payload.paymentMethod,
+          paymentReference: payload.paymentReference,
+          deliveryStatus: payload.deliveryStatus,
+          deliveryAddress: payload.deliveryAddress,
+          vehicleOrDriver: payload.vehicleOrDriver,
+          pinRequired,
+          pin: pinRequired ? payload.pin : undefined,
+        }),
+      });
+
+      const confirmData = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        duplicate?: boolean;
+        error?: string;
+        confirmationId?: string;
+        totals?: typeof verifiedTotals;
+      };
+
+      if (!response.ok || !confirmData?.ok || confirmData?.duplicate) {
+        return {
+          ok: false,
+          duplicate: Boolean(confirmData?.duplicate),
+          error:
+            confirmData?.error ||
+            'Backend confirmation failed — stock was NOT deducted and no harvest lot was created.',
+        };
+      }
+
+      backendConfirmationId = confirmData.confirmationId || '';
+      if (confirmData.totals) {
+        verifiedTotals = confirmData.totals;
+      }
+      committedSaleKeysRef.current.add(idempotencyKey);
+    } catch {
+      return {
+        ok: false,
+        error:
+          'Unable to reach confirmation server — stock was NOT deducted and no harvest lot was created.',
+      };
+    } finally {
+      inFlightSaleKeysRef.current.delete(idempotencyKey);
+    }
+
+    const today = todayIso();
+    const saleId = `sale-${Date.now()}`;
+    const invoiceNo = formatInvoiceNo(state.invoiceSequence, today);
+
+    // Build any instant HarvestLots for direct-from-pond lines, and resolve final SaleLines
+    const directLotsCreated: HarvestLot[] = [];
+    const pondDeductions: Record<string, { fishCount: number; kg: number; lotCode: string }> = {};
+    const finalLines: SaleLine[] = [];
+
+    const pondGroups = payload.lines.filter((l) => l.sourceType === 'pond');
+    const uniqueDirectPonds = Array.from(new Set(pondGroups.map((l) => l.pondCode)));
+
+    uniqueDirectPonds.forEach((pCode, idx) => {
+      const pond = state.ponds.find((p) => p.code === pCode);
+      const batch = state.batches.find((b) => b.pondCode === pCode && b.status !== 'Completed') ||
+        state.batches.find((b) => b.pondCode === pCode);
+      const pLines = pondGroups.filter((l) => l.pondCode === pCode);
+
+      const avgWeightKg = batch ? Math.max(0.15, batch.currentAvgWeightG / 1000) : 0.35;
+      const sumByGrade = (g: 'Large' | 'Medium' | 'Small') => {
+        const kg = roundKg(pLines.filter((l) => l.grade === g).reduce((s, l) => s + l.kg, 0));
+        const explicitCount = pLines.filter((l) => l.grade === g).reduce((s, l) => s + l.count, 0);
+        const estCount = explicitCount > 0 ? explicitCount : Math.round(kg / avgWeightKg);
+        return { kg, count: estCount };
+      };
+
+      const lg = sumByGrade('Large');
+      const md = sumByGrade('Medium');
+      const sm = sumByGrade('Small');
+      const totalDirectCount = Math.min(pond?.currentFish || 0, lg.count + md.count + sm.count);
+      const totalDirectKg = roundKg(lg.kg + md.kg + sm.kg);
+
+      const newLotId = `lot-dir-${Date.now()}-${idx}`;
+      const newLotCode = formatLotCode(state.harvestLots.length + 1 + idx, today);
+
+      directLotsCreated.push({
+        id: newLotId,
+        lotCode: newLotCode,
+        date: today,
+        pondCode: pCode,
+        batchCode: batch?.batchCode || 'DIRECT',
+        species: pond?.species || pLines[0].species,
+        grades: {
+          largeKg: lg.kg,
+          largeCount: lg.count,
+          mediumKg: md.kg,
+          mediumCount: md.count,
+          smallKg: sm.kg,
+          smallCount: sm.count,
+          damagedKg: 0,
+        },
+        remainingKg: { large: 0, medium: 0, small: 0 },
+        remainingCount: { large: 0, medium: 0, small: 0 },
+        approvedBy: state.activeUser.name,
+        notes: `Direct pond harvest for ${invoiceNo}`,
+      });
+
+      pondDeductions[pCode] = {
+        fishCount: totalDirectCount,
+        kg: totalDirectKg,
+        lotCode: newLotCode,
+      };
+
+      pLines.forEach((pl) => {
+        const kg = roundKg(pl.kg);
+        const price = roundTzs(pl.pricePerKgTzs);
+        finalLines.push({
+          lotId: newLotId,
+          pondCode: pl.pondCode,
+          batchCode: batch?.batchCode || pl.batchCode,
+          species: pl.species,
+          grade: pl.grade,
+          kg,
+          count: pl.count > 0 ? pl.count : Math.round(kg / avgWeightKg),
+          pricePerKgTzs: price,
+          amountTzs: roundTzs(kg * price),
+        });
+      });
+    });
+
+    payload.lines
+      .filter((l) => l.sourceType === 'lot' && l.lotId)
+      .forEach((l) => {
+        const kg = roundKg(l.kg);
+        const price = roundTzs(l.pricePerKgTzs);
+        finalLines.push({
+          lotId: l.lotId!,
+          pondCode: l.pondCode,
+          batchCode: l.batchCode,
+          species: l.species,
+          grade: l.grade,
+          kg,
+          count: l.count,
+          pricePerKgTzs: price,
+          amountTzs: roundTzs(kg * price),
+        });
+      });
+
+    const newSale: Sale = {
+      id: saleId,
+      invoiceNo,
+      date: today,
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      lines: finalLines,
+      subtotalTzs: verifiedTotals.subtotalTzs,
+      discountTzs: verifiedTotals.discountTzs,
+      discountReason: verifiedTotals.discountTzs > 0 ? payload.discountReason.trim() : undefined,
+      taxRatePct: verifiedTotals.taxRatePct,
+      taxTzs: verifiedTotals.taxTzs,
+      totalTzs: verifiedTotals.totalTzs,
+      paidTzs: verifiedTotals.paidTzs,
+      balanceTzs: verifiedTotals.balanceTzs,
+      paymentStatus:
+        verifiedTotals.balanceTzs === 0
+          ? 'Paid'
+          : verifiedTotals.paidTzs > 0
+            ? 'Partial'
+            : 'Credit',
+      deliveryStatus: payload.deliveryStatus,
+      deliveryAddress: payload.deliveryAddress,
+      vehicleOrDriver: payload.vehicleOrDriver,
+      createdBy: state.activeUser.name,
+      approvedBy: state.activeUser.name,
+      idempotencyKey,
+      backendConfirmationId,
+    };
+
+    const newPayment: Payment | null =
+      verifiedTotals.paidTzs > 0
+        ? {
+            id: `pay-${Date.now()}`,
+            saleId,
+            date: today,
+            amountTzs: verifiedTotals.paidTzs,
+            method: payload.paymentMethod,
+            reference: payload.paymentReference || `${payload.paymentMethod.toUpperCase()}-${invoiceNo}`,
+            receivedBy: state.activeUser.name,
+          }
+        : null;
+
+    const totalSoldKg = roundKg(finalLines.reduce((s, l) => s + l.kg, 0));
+    const nextPricesByKey = { ...state.salesPreferences.lastPricesByKey };
+    finalLines.forEach((l) => {
+      nextPricesByKey[`${l.species}|${l.grade}|${customer.priceTier}`] = l.pricePerKgTzs;
+    });
+
+    const prevSnapshot = state;
+    setState((prev) => {
+      if (prev.sales.some((s) => s.idempotencyKey === idempotencyKey)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        harvestLots: [
+        ...directLotsCreated,
+        ...prev.harvestLots.map((lot) => {
+          const usage = lotKgUsage[lot.id];
+          if (!usage) return lot;
+          const nextRemLg = roundKg(Math.max(0, lot.remainingKg.large - usage.large));
+          const nextRemMd = roundKg(Math.max(0, lot.remainingKg.medium - usage.medium));
+          const nextRemSm = roundKg(Math.max(0, lot.remainingKg.small - usage.small));
+          const ratioLg = lot.remainingKg.large > 0 ? nextRemLg / lot.remainingKg.large : 0;
+          const ratioMd = lot.remainingKg.medium > 0 ? nextRemMd / lot.remainingKg.medium : 0;
+          const ratioSm = lot.remainingKg.small > 0 ? nextRemSm / lot.remainingKg.small : 0;
+          return {
+            ...lot,
+            remainingKg: { large: nextRemLg, medium: nextRemMd, small: nextRemSm },
+            remainingCount: {
+              large: Math.round(lot.remainingCount.large * ratioLg),
+              medium: Math.round(lot.remainingCount.medium * ratioMd),
+              small: Math.round(lot.remainingCount.small * ratioSm),
+            },
+          };
+        }),
+      ],
+      ponds: prev.ponds.map((p) => {
+        const ded = pondDeductions[p.code];
+        if (!ded) return p;
+        const nextFish = Math.max(0, p.currentFish - ded.fishCount);
+        return {
+          ...p,
+          currentFish: nextFish,
+          status: nextFish === 0 ? 'Preparing' : p.status,
+          readinessPct: nextFish === 0 ? 0 : p.readinessPct,
+        };
+      }),
+      batches: prev.batches.map((b) => {
+        const ded = pondDeductions[b.pondCode];
+        if (!ded || b.status === 'Completed') return b;
+        const nextRemaining = Math.max(0, b.currentEstimatedFish - ded.fishCount);
+        const nextStatus = nextRemaining === 0 ? ('Completed' as const) : ('Partial Harvest' as const);
+        return {
+          ...b,
+          currentEstimatedFish: nextRemaining,
+          status: nextStatus,
+          history: [
+            ...b.history,
+            {
+              id: `ev-${Date.now()}-${b.id}`,
+              step: b.history.length + 1,
+              title: `Direct Harvest & Sale (${invoiceNo})`,
+              detail: `Sold ${ded.kg.toFixed(1)} kg (~${ded.fishCount.toLocaleString()} fish) to ${customer.name} via ${ded.lotCode}.`,
+              date: today,
+              actor: prev.activeUser.name,
+            },
+          ],
+        };
+      }),
+      sales: [newSale, ...prev.sales],
+      payments: newPayment ? [newPayment, ...prev.payments] : prev.payments,
+      invoiceSequence: prev.invoiceSequence + 1,
+      preOrders: payload.preOrderId
+        ? prev.preOrders.map((po) =>
+            po.id === payload.preOrderId
+              ? { ...po, status: 'Converted' as const, convertedSaleId: saleId }
+              : po
+          )
+        : prev.preOrders,
+      salesPreferences: {
+        ...prev.salesPreferences,
+        lastCustomerId: customer.id,
+        lastPaymentMethod: payload.paymentMethod,
+        lastPricesByKey: nextPricesByKey,
+      },
+      finances: [
+        {
+          id: `fin-${Date.now()}`,
+          date: today,
+          type: 'Revenue',
+          category: 'Harvest Sales',
+          description: `Invoice ${invoiceNo} – ${totalSoldKg.toFixed(1)} kg (${customer.name})`,
+          pondCode: finalLines[0]?.pondCode,
+          batchCode: finalLines[0]?.batchCode,
+          amountTzs: verifiedTotals.totalTzs,
+          counterparty: customer.name,
+          paymentStatus:
+            verifiedTotals.balanceTzs === 0
+              ? 'Paid'
+              : verifiedTotals.paidTzs > 0
+                ? 'Partial'
+                : 'Pending Debt',
+        },
+        ...prev.finances,
+      ],
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          kind: 'harvest',
+          title: `Sale ${invoiceNo} – ${customer.name}`,
+          subtitle: `${totalSoldKg.toFixed(1)} kg · TZS ${verifiedTotals.totalTzs.toLocaleString()} (${newSale.paymentStatus})`,
+          timeAgo: 'Just now',
+        },
+        ...prev.activities,
+      ],
+      auditLogs: [
+        {
+          id: `aud-${Date.now()}`,
+          timestamp: nowTimestamp(),
+          actorName: prev.activeUser.name,
+          actorRole: prev.activeUser.role,
+          module: 'Sales & Invoicing',
+          action: `Sale Recorded (${invoiceNo})`,
+          details: `Sold ${totalSoldKg.toFixed(2)} kg to ${customer.name} for TZS ${verifiedTotals.totalTzs.toLocaleString()} (Paid TZS ${verifiedTotals.paidTzs.toLocaleString()} via ${payload.paymentMethod}). Ref: ${backendConfirmationId}`,
+          pinVerified: pinRequired,
+        },
+        ...prev.auditLogs,
+      ],
+    };
+    });
+
+    triggerHaptic(12);
+    window.setTimeout(
+      () => {
+        setActiveReceiptSaleId(saleId);
+      },
+      effectiveReducedMotion ? 0 : 750
+    );
+    showToast(`Invoice ${invoiceNo} created for ${customer.name}.`, {
+      undoSnapshot: prevSnapshot,
+      undoCloseReceipt: true,
+    });
+    return { ok: true, sale: newSale };
+  };
+
+  const handleCollectSalePayment = (payload: {
+    saleId: string;
+    amountTzs: number;
+    method: PaymentMethod;
+    reference: string;
+  }): { ok: boolean; error?: string } => {
+    const target = state.sales.find((s) => s.id === payload.saleId);
+    if (!target) return { ok: false, error: 'Invoice not found.' };
+    const amt = roundTzs(payload.amountTzs);
+    if (amt <= 0 || amt > target.balanceTzs) {
+      return {
+        ok: false,
+        error: `Amount must be between TZS 1 and TZS ${target.balanceTzs.toLocaleString()}.`,
+      };
+    }
+
+    const nextPaid = roundTzs(target.paidTzs + amt);
+    const nextBalance = roundTzs(Math.max(0, target.totalTzs - nextPaid));
+    const nextStatus: Sale['paymentStatus'] =
+      nextBalance === 0 ? 'Paid' : nextPaid > 0 ? 'Partial' : 'Credit';
+
+    const payment: Payment = {
+      id: `pay-${Date.now()}`,
+      saleId: target.id,
+      date: todayIso(),
+      amountTzs: amt,
+      method: payload.method,
+      reference: payload.reference || `${payload.method.toUpperCase()}-${Date.now().toString().slice(-5)}`,
+      receivedBy: state.activeUser.name,
+    };
+
+    const prevSnapshot = state;
+    setState((prev) => ({
+      ...prev,
+      sales: prev.sales.map((s) =>
+        s.id === target.id
+          ? { ...s, paidTzs: nextPaid, balanceTzs: nextBalance, paymentStatus: nextStatus }
+          : s
+      ),
+      payments: [payment, ...prev.payments],
+      salesPreferences: {
+        ...prev.salesPreferences,
+        lastPaymentMethod: payload.method,
+      },
+      activities: [
+        {
+          id: `act-${Date.now()}`,
+          kind: 'payment',
+          title: `Payment collected – ${target.invoiceNo}`,
+          subtitle: `TZS ${amt.toLocaleString()} via ${payload.method} (${target.customerName})`,
+          timeAgo: 'Just now',
+        },
+        ...prev.activities,
+      ],
+      auditLogs: [
+        {
+          id: `aud-${Date.now()}`,
+          timestamp: nowTimestamp(),
+          actorName: prev.activeUser.name,
+          actorRole: prev.activeUser.role,
+          module: 'Receivables & Cash',
+          action: `Payment Recorded (${target.invoiceNo})`,
+          details: `Collected TZS ${amt.toLocaleString()} via ${payload.method} (${payment.reference}). Remaining balance: TZS ${nextBalance.toLocaleString()}.`,
+          pinVerified: false,
+        },
+        ...prev.auditLogs,
+      ],
+    }));
+    triggerHaptic(10);
+    showToast(`Recorded TZS ${amt.toLocaleString()} payment on ${target.invoiceNo}.`, {
+      undoSnapshot: prevSnapshot,
+    });
+    return { ok: true };
+  };
+
+  const handleUpdateSaleDelivery = (saleId: string, status: Sale['deliveryStatus']) => {
+    const prevSnapshot = state;
+    setState((prev) => ({
+      ...prev,
+      sales: prev.sales.map((s) => (s.id === saleId ? { ...s, deliveryStatus: status } : s)),
+    }));
+    triggerHaptic(8);
+    showToast(`Delivery status updated to ${status}.`, { undoSnapshot: prevSnapshot });
+  };
+
+  const handleAddPreOrder = (
+    payload: Omit<PreOrder, 'id' | 'status' | 'date'>
+  ): { ok: boolean; error?: string } => {
+    const newPo: PreOrder = {
+      ...payload,
+      id: `po-${Date.now()}`,
+      date: todayIso(),
+      status: 'Open',
+    };
+    setState((prev) => ({
+      ...prev,
+      preOrders: [newPo, ...prev.preOrders],
+    }));
+    showToast('Pre-order saved.');
+    return { ok: true };
+  };
+
+  const handleCancelPreOrder = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      preOrders: prev.preOrders.map((po) =>
+        po.id === id ? { ...po, status: 'Cancelled' as const } : po
+      ),
+    }));
+    showToast('Pre-order cancelled.');
   };
 
   const navItems: Array<{
@@ -584,6 +1763,7 @@ export default function App() {
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { id: 'farms-ponds', label: t.nav.farmsPonds, icon: Waves },
     { id: 'fish-species', label: t.nav.fishSpecies, icon: Fish },
+    { id: 'fish-stock', label: t.nav.fishStock, icon: Boxes },
     { id: 'feeding', label: t.nav.feeding, icon: Utensils },
     { id: 'water-quality', label: t.nav.waterQuality, icon: Droplets },
     { id: 'fish-health', label: t.nav.fishHealth, icon: HeartPulse },
@@ -598,29 +1778,35 @@ export default function App() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#E9F0F7] text-slate-900">
+    <div className="flex min-h-screen bg-[#E9F0F7] text-slate-900 transition-colors duration-200 dark:bg-[#060f1e] dark:text-slate-100">
       {/* MOBILE OVERLAY */}
-      {mobileMenuOpen && (
-        <div
-          onClick={() => setMobileMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
-        />
-      )}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DURATIONS.base }}
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-[1px] lg:hidden"
+          />
+        )}
+      </AnimatePresence>
 
-      {/* LEFT SIDEBAR (Deep Navy matching reference image) */}
+      {/* LEFT SIDEBAR (Deep Navy matching brand identity) */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col bg-gradient-to-b from-[#081C3A] via-[#061630] to-[#041024] text-white transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-white/10">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 pt-4 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 via-cyan-500 to-emerald-500 shadow-md ring-2 ring-white/20">
               <Fish className="h-5 w-5 text-white" />
             </div>
             <div>
-              <div className="font-display text-[17px] font-extrabold tracking-tight text-white leading-none">
+              <div className="font-display text-[17px] font-extrabold leading-none tracking-tight text-white">
                 DukaAquSmart
               </div>
               <div className="mt-1 text-[9.5px] font-medium leading-tight text-sky-200/80">
@@ -631,13 +1817,14 @@ export default function App() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            className="rounded p-1 text-white/70 hover:bg-white/10 lg:hidden"
+            aria-label="Close navigation menu"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Navigation Links */}
+        {/* Navigation Links with layoutId sliding highlight */}
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -650,19 +1837,24 @@ export default function App() {
                   setActiveNav(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[12.5px] font-medium transition-colors ${
-                  active
-                    ? 'bg-[#1D72E8] text-white shadow-sm'
-                    : 'text-slate-200/90 hover:bg-white/10 hover:text-white'
+                className={`relative z-10 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12.5px] font-medium transition-colors ${
+                  active ? 'text-white' : 'text-slate-200/90 hover:bg-white/10 hover:text-white'
                 }`}
               >
-                <span className="flex items-center gap-2.5 min-w-0">
+                {active && (
+                  <motion.span
+                    layoutId="sidebar-active-pill"
+                    transition={SPRING_SNAPPY}
+                    className="absolute inset-0 -z-10 rounded-xl bg-[#1D72E8] shadow-sm"
+                  />
+                )}
+                <span className="flex min-w-0 items-center gap-2.5">
                   <Icon className="h-4 w-4 shrink-0 opacity-90" />
                   <span className="truncate">{item.label}</span>
                 </span>
                 {item.badge !== undefined && item.badge > 0 && (
                   <span
-                    className={`ml-2 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${
+                    className={`ml-2 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white tabular-nums ${
                       item.badgeTone === 'red' ? 'bg-red-500' : 'bg-orange-500'
                     }`}
                   >
@@ -678,7 +1870,6 @@ export default function App() {
         <div className="border-t border-white/10 px-3 pt-2.5 pb-2">
           <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5">
             <div className="flex items-center gap-2">
-              {/* Tanzania Flag SVG */}
               <svg viewBox="0 0 24 16" className="h-3.5 w-5 shrink-0 rounded-[2px]">
                 <rect width="24" height="16" fill="#1EB53A" />
                 <polygon points="0,16 24,0 24,16" fill="#00A3DD" />
@@ -705,31 +1896,41 @@ export default function App() {
 
         {/* User Profile + Interactive Role Switcher */}
         <div className="relative px-3 pb-3">
-          {roleMenuOpen && (
-            <div className="absolute bottom-24 left-3 right-3 z-50 rounded-xl border border-white/15 bg-[#0C254A] p-2 shadow-xl">
-              <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-sky-300">
-                Switch Active Persona
-              </div>
-              {state.employees.map((emp) => (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => handleSwitchUser(emp.id)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs ${
-                    state.activeUser.id === emp.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-200 hover:bg-white/10'
-                  }`}
-                >
-                  <div>
-                    <div className="font-semibold">{emp.name}</div>
-                    <div className="text-[10px] text-sky-200">{emp.roleLabel}</div>
-                  </div>
-                  <span className="font-mono text-[10px] opacity-80">PIN {emp.pin}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <AnimatePresence>
+            {roleMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
+                className="absolute bottom-24 left-3 right-3 z-50 rounded-xl border border-white/15 bg-[#0C254A] p-2 shadow-xl"
+              >
+                <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                  Switch Active Persona
+                </div>
+                {state.employees.map((emp) => (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => handleSwitchUser(emp.id)}
+                    className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
+                      state.activeUser.id === emp.id
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-200 hover:bg-white/10'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-semibold">{emp.name}</div>
+                      <div className="text-[10px] text-sky-200">{emp.roleLabel}</div>
+                    </div>
+                    <span className="text-[10px] text-sky-200/80">
+                      {state.activeUser.id === emp.id ? 'Active' : emp.role}
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <button
             type="button"
@@ -764,135 +1965,282 @@ export default function App() {
 
       {/* MAIN CONTENT SHELL */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* TOP SCENIC TANZANIA AQUACULTURE HEADER BANNER */}
-        <header className="relative overflow-hidden border-b border-slate-200/80 bg-white">
+        {/* STICKY TOP SCENIC TANZANIA AQUACULTURE HEADER BANNER */}
+        <header
+          className={`sticky top-0 z-30 border-b border-slate-200/80 bg-white transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900 ${
+            isScrolled ? 'shadow-md dark:shadow-slate-950/60' : ''
+          }`}
+        >
           <div
-            className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5"
+            className="relative flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 sm:px-5 sm:py-3"
             style={{
               backgroundImage: `linear-gradient(90deg, rgba(240,247,255,0.95) 0%, rgba(240,247,255,0.82) 48%, rgba(255,255,255,0.35) 100%), url(${ASSET_IMAGES.banner})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}
           >
-            <div className="flex items-center gap-3">
+            {/* Dark overlay layer for crisp readability over scenic banner in dark mode */}
+            <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-[#07162c]/95 via-[#091c38]/90 to-[#0d1a2e]/85 dark:block" />
+
+            <div className="relative z-10 flex items-center gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="rounded-lg border border-slate-300 bg-white/90 p-2 text-slate-700 lg:hidden"
+                aria-label="Open menu"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white/95 text-slate-700 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 lg:hidden"
               >
                 <Menu className="h-4 w-4" />
               </button>
               <div>
-                <h1 className="font-display text-lg font-extrabold tracking-tight text-[#0A2540] sm:text-[21px]">
+                <h1 className="font-display text-base font-extrabold tracking-tight text-[#0A2540] dark:text-white sm:text-[20px]">
                   {t.heroTitle}
                 </h1>
-                <p className="text-xs font-semibold text-[#16538E]">{t.heroSubtitle}</p>
+                <p className="hidden text-xs font-semibold text-[#16538E] dark:text-sky-300 sm:block">
+                  {t.heroSubtitle}
+                </p>
               </div>
             </div>
 
-            {/* Right Header Controls matching screenshot */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-                <Calendar className="h-3.5 w-3.5 text-blue-600" />
+            {/* Right Header Controls */}
+            <div className="relative z-10 flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div className="hidden items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 md:flex">
+                <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-sky-400" />
                 <span>Tue, 19 Nov 2026</span>
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-                <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
+                <MapPin className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 <select
                   value={selectedFarmId}
                   onChange={(e) => setSelectedFarmId(e.target.value)}
                   aria-label="Select Farm Location"
-                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none"
+                  className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none dark:text-slate-100"
                 >
                   {state.farms.map((f) => (
-                    <option key={f.id} value={f.id}>
+                    <option key={f.id} value={f.id} className="dark:bg-slate-900">
                       {f.region}
                     </option>
                   ))}
-                  <option value="all">All Tanzania Farms</option>
+                  <option value="all" className="dark:bg-slate-900">
+                    All Tanzania Farms
+                  </option>
                 </select>
               </div>
 
+              {/* Theme quick toggle */}
+              <button
+                type="button"
+                onClick={cycleThemeMode}
+                title={`${t.ui.themeLabel}: ${themeMode}`}
+                aria-label={`${t.ui.themeLabel}: ${themeMode}`}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {themeMode === 'dark' ? (
+                  <Moon className="h-4 w-4 text-sky-400" />
+                ) : themeMode === 'system' ? (
+                  <Monitor className="h-4 w-4 text-blue-600 dark:text-sky-300" />
+                ) : (
+                  <Sun className="h-4 w-4 text-amber-500" />
+                )}
+              </button>
+
+              {/* Pulsing Alert Bell */}
               <div className="relative">
-                <button
+                <motion.button
+                  key={`bell-${bellPulseKey}`}
                   type="button"
                   onClick={() => setNotifOpen(!notifOpen)}
                   aria-label="Notifications"
-                  className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs hover:bg-slate-50"
+                  initial={bellPulseKey > 0 ? { scale: 1, rotate: 0 } : false}
+                  animate={
+                    bellPulseKey > 0 && !effectiveReducedMotion
+                      ? { scale: [1, 1.15, 1], rotate: [0, -10, 10, -6, 0] }
+                      : { scale: 1 }
+                  }
+                  transition={{ duration: 0.45 }}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 dark:hover:bg-slate-700"
                 >
                   <Bell className="h-4 w-4" />
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                  <motion.span
+                    key={`badge-${openTasksAlertsCount}`}
+                    initial={effectiveReducedMotion ? false : { scale: 0.7 }}
+                    animate={{ scale: 1 }}
+                    transition={SPRING_SNAPPY}
+                    aria-live="polite"
+                    className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white tabular-nums"
+                  >
                     {openTasksAlertsCount}
-                  </span>
-                </button>
+                  </motion.span>
+                </motion.button>
 
-                {notifOpen && (
-                  <div className="absolute right-0 top-10 z-50 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-900">
-                      <span>Farm Alerts ({openTasksAlertsCount})</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNotifOpen(false);
-                          setActiveNav('tasks-alerts');
-                        }}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Open Center
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {state.alerts.slice(0, 3).map((al) => (
-                        <div key={al.id} className="rounded-lg bg-slate-50 p-2 text-xs">
-                          <div className="font-bold text-slate-900">{al.title}</div>
-                          <div className="text-[11px] text-slate-500">{al.detail}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <AnimatePresence>
+                  {notifOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                      transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
+                      className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-modal dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
+                        <span>Farm Alerts ({openTasksAlertsCount})</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifOpen(false);
+                            setActiveNav('tasks-alerts');
+                          }}
+                          className="text-blue-600 hover:underline dark:text-sky-400"
+                        >
+                          Open Center
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {state.alerts.slice(0, 3).map((al) => (
+                          <div
+                            key={al.id}
+                            className="rounded-xl bg-slate-50 p-2 text-xs dark:bg-slate-800/80"
+                          >
+                            <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
+                              {al.severity === 'High' && !al.acknowledged && (
+                                <span className="relative flex h-2 w-2 shrink-0">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                                </span>
+                              )}
+                              <span className="truncate">{al.title}</span>
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                              {al.detail}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <button
                 type="button"
                 onClick={toggleFullscreen}
                 aria-label="Toggle Fullscreen"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs hover:bg-slate-50"
+                className="hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 dark:hover:bg-slate-700 sm:flex"
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
             </div>
           </div>
+
+          {/* SLIDING OFFLINE / SYNC QUEUE BANNER */}
+          <AnimatePresence>
+            {(state.offlineMode || state.pendingSyncQueue.length > 0 || isSyncing) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
+                className="overflow-hidden border-t border-amber-200 bg-amber-50/95 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-200"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-1.5 text-[11px] font-semibold sm:px-5">
+                  <div className="flex items-center gap-2">
+                    <WifiOff className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span>
+                      {state.offlineMode
+                        ? t.ui.offlineBanner
+                        : `${state.pendingSyncQueue.length} ${t.ui.pendingQueueLabel}`}
+                    </span>
+                    {state.pendingSyncQueue.length > 0 && (
+                      <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900 tabular-nums dark:bg-amber-900 dark:text-amber-200">
+                        {state.pendingSyncQueue.length} queued
+                      </span>
+                    )}
+                  </div>
+                  {state.pendingSyncQueue.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSyncNow}
+                      disabled={isSyncing}
+                      className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                      {isSyncing ? t.ui.syncingNow : t.ui.syncNow}
+                    </button>
+                  )}
+                </div>
+                {isSyncing && (
+                  <div className="h-1 w-full bg-amber-200/60 dark:bg-amber-900/60">
+                    <div
+                      className="h-full bg-emerald-500 transition-[width] duration-200"
+                      style={{ width: `${syncProgress}%` }}
+                    />
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </header>
 
-        {/* TOAST NOTIFICATION */}
-        {toastMsg && (
-          <div className="fixed bottom-16 right-5 z-[1100] flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xl">
-            <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-            {toastMsg}
-          </div>
-        )}
-
-        {/* MAIN VIEWPORT */}
-        <main className="flex-1 p-3.5 sm:p-4">
-          {activeNav === 'dashboard' && (
-            <DashboardView
-              state={state}
-              language={language}
-              selectedFarmId={selectedFarmId}
-              onNavigate={setActiveNav}
-              onQuickAction={setQuickAction}
-              onSelectPond={(pond) => setSelectedPondQr(pond)}
-              onAcknowledgeAlert={(id) => {
-                setState((prev) => ({
-                  ...prev,
-                  alerts: prev.alerts.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)),
-                }));
-                showToast('Alert acknowledged.');
-              }}
-            />
+        {/* TOAST NOTIFICATION WITH UNDO (Bottom on mobile, Top-right on desktop) */}
+        <AnimatePresence>
+          {toastState && (
+            <motion.div
+              key={toastState.id}
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
+              className="no-print fixed inset-x-3 bottom-20 z-[1100] flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-950/95 px-4 py-2.5 text-xs font-semibold text-white shadow-modal backdrop-blur-xs sm:inset-x-auto sm:top-4 sm:right-5 sm:bottom-auto sm:max-w-md"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span className="truncate">{toastState.message}</span>
+              </div>
+              {toastState.undoSnapshot && (
+                <button
+                  type="button"
+                  onClick={handleUndoToast}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-white/25"
+                >
+                  <RotateCcw className="h-3 w-3" /> {t.ui.undo}
+                </button>
+              )}
+            </motion.div>
           )}
+        </AnimatePresence>
+
+        {/* MAIN VIEWPORT WITH PAGE CROSS-FADE */}
+        <main className="flex-1 p-3.5 pb-24 sm:p-4 lg:pb-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeNav}
+              variants={fadeUp}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              {activeNav === 'dashboard' && (
+                <DashboardView
+                  state={state}
+                  language={language}
+                  selectedFarmId={selectedFarmId}
+                  onNavigate={setActiveNav}
+                  onQuickAction={setQuickAction}
+                  onOpenQuickSale={() => openQuickSaleModal()}
+                  onSelectPond={(pond) => setSelectedPondQr(pond)}
+                  onAcknowledgeAlert={(id) => {
+                    const prevSnapshot = state;
+                    setState((prev) => ({
+                      ...prev,
+                      alerts: prev.alerts.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)),
+                    }));
+                    triggerHaptic(8);
+                    showToast('Alert acknowledged.', { undoSnapshot: prevSnapshot });
+                  }}
+                />
+              )}
 
           {activeNav === 'farms-ponds' && (
             <FarmPondsModule
@@ -1021,7 +2369,7 @@ export default function App() {
               }}
               onTransferBatch={(payload) => {
                 if (payload.pin !== state.activeUser.pin) {
-                  return { ok: false, error: `Invalid PIN. Expected ${state.activeUser.pin}.` };
+                  return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
                 }
                 const batch = state.batches.find((b) => b.id === payload.batchId);
                 const destPond = state.ponds.find((p) => p.code === payload.toPondCode);
@@ -1109,6 +2457,19 @@ export default function App() {
                   ),
                 }));
               }}
+            />
+          )}
+
+          {activeNav === 'fish-stock' && (
+            <FishStockModule
+              state={state}
+              language={language}
+              onBackToMenu={() => setActiveNav('dashboard')}
+              onHarvestPond={(pondCode) => openHarvestModal(pondCode)}
+              onQuickSalePond={(pondCode) => openQuickSaleModal({ pondCode })}
+              onQuickSaleLot={(lotId) => openQuickSaleModal({ lotId })}
+              onCreateManualStockLot={handleCreateManualStockLot}
+              onRegisterPondStock={handleRegisterPondStock}
             />
           )}
 
@@ -1211,53 +2572,33 @@ export default function App() {
           )}
 
           {activeNav === 'harvest-sales' && (
-            <HarvestSalesModule
+            <SalesModule
               state={state}
+              language={language}
               onQuickAction={setQuickAction}
-              onCollectHarvestPayment={(harvestId) => {
-                setState((prev) => {
-                  const target = prev.harvests.find((h) => h.id === harvestId);
-                  if (!target) return prev;
-                  const balance = Math.max(0, target.totalAmountTzs - target.paidAmountTzs);
-                  return {
-                    ...prev,
-                    harvests: prev.harvests.map((h) =>
-                      h.id === harvestId ? { ...h, paidAmountTzs: h.totalAmountTzs } : h
-                    ),
-                    finances: [
-                      {
-                        id: `fin-${Date.now()}`,
-                        date: todayIso(),
-                        type: 'Revenue',
-                        category: 'Harvest Sales',
-                        description: `Customer receivable settled – ${target.customerName} (${target.pondCode})`,
-                        pondCode: target.pondCode,
-                        batchCode: target.batchCode,
-                        amountTzs: balance,
-                        counterparty: target.customerName,
-                        paymentStatus: 'Paid',
-                      },
-                      ...prev.finances,
-                    ],
-                    activities: [
-                      {
-                        id: `act-${Date.now()}`,
-                        kind: 'payment',
-                        title: `Payment received – ${target.customerName}`,
-                        subtitle: `TZS ${balance.toLocaleString()}`,
-                        timeAgo: 'Just now',
-                      },
-                      ...prev.activities,
-                    ],
-                  };
-                });
-                showToast('Customer balance settled and recorded in TZS ledger.');
-              }}
+              onOpenQuickSale={openQuickSaleModal}
+              onBackToMenu={() => setActiveNav('dashboard')}
+              onOpenFishStock={() => setActiveNav('fish-stock')}
+              onViewInvoice={(sale) => setActiveReceiptSaleId(sale.id)}
+              onCollectPayment={handleCollectSalePayment}
+              onUpdateDeliveryStatus={handleUpdateSaleDelivery}
+              onAddCustomer={handleAddCustomer}
+              onUpdateCustomer={handleUpdateCustomer}
+              onSavePriceItem={handleSavePriceItem}
+              onAddPreOrder={handleAddPreOrder}
+              onCancelPreOrder={handleCancelPreOrder}
             />
           )}
 
           {activeNav === 'inventory' && (
-            <InventoryModule state={state} onQuickAction={setQuickAction} />
+            <InventoryModule
+              state={state}
+              onQuickAction={(action) =>
+                action === 'inventory' ? openInventoryModal() : setQuickAction(action)
+              }
+              onBackToMenu={() => setActiveNav('dashboard')}
+              onRestockItem={(itemId) => openInventoryModal(itemId)}
+            />
           )}
 
           {activeNav === 'finance' && (
@@ -1272,22 +2613,26 @@ export default function App() {
             <TasksAlertsModule
               state={state}
               onCompleteTask={(taskId) => {
+                const prevSnapshot = state;
                 setState((prev) => ({
                   ...prev,
                   tasks: prev.tasks.map((tk) =>
                     tk.id === taskId ? { ...tk, status: 'Completed' } : tk
                   ),
                 }));
-                showToast('Task marked completed.');
+                triggerHaptic(10);
+                showToast('Task marked completed.', { undoSnapshot: prevSnapshot });
               }}
               onAcknowledgeAlert={(alertId) => {
+                const prevSnapshot = state;
                 setState((prev) => ({
                   ...prev,
                   alerts: prev.alerts.map((al) =>
                     al.id === alertId ? { ...al, acknowledged: true } : al
                   ),
                 }));
-                showToast('Alert acknowledged.');
+                triggerHaptic(8);
+                showToast('Alert acknowledged.', { undoSnapshot: prevSnapshot });
               }}
             />
           )}
@@ -1300,19 +2645,20 @@ export default function App() {
             <SettingsHelpModule
               mode={activeNav}
               state={state}
+              language={language}
               onToggleOffline={() =>
                 setState((prev) => ({ ...prev, offlineMode: !prev.offlineMode }))
               }
-              onSyncNow={() =>
-                setState((prev) => ({ ...prev, pendingSyncQueue: [] }))
-              }
+              onSyncNow={handleSyncNow}
               onExportAll={() => showToast('Backup CSV exported.')}
             />
           )}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
-        {/* BOTTOM TANZANIA VALUE BANNER FOOTER (Exact Reference Style) */}
-        <footer className="mt-auto flex flex-wrap items-center justify-between overflow-hidden bg-gradient-to-r from-[#081D3D] via-[#0B2954] to-[#0D3366] text-white">
+        {/* BOTTOM TANZANIA VALUE BANNER FOOTER */}
+        <footer className="mt-auto mb-14 flex flex-wrap items-center justify-between overflow-hidden bg-gradient-to-r from-[#081D3D] via-[#0B2954] to-[#0D3366] text-white lg:mb-0">
           <div className="flex flex-wrap items-center gap-6 px-5 py-2.5 text-xs font-semibold text-slate-100">
             <span className="flex items-center gap-2">
               <Fish className="h-4 w-4 text-sky-300" /> {t.footer.p1}
@@ -1343,16 +2689,207 @@ export default function App() {
         </footer>
       </div>
 
+      {/* MOBILE FLOATING "+" QUICK-ADD FAB */}
+      <div className="no-print lg:hidden">
+        <AnimatePresence>
+          {fabOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DURATIONS.fast }}
+                onClick={() => setFabOpen(false)}
+                className="fixed inset-0 z-40 bg-slate-950/35"
+              />
+              <motion.div
+                initial={{ opacity: 0, y: 12, scale: 0.92 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.92 }}
+                transition={SPRING_SNAPPY}
+                className="fixed right-3.5 bottom-32 z-50 flex flex-col items-end gap-2"
+              >
+                {[
+                  {
+                    label: t.actions.quickSale,
+                    tone: 'bg-emerald-600 text-white',
+                    onClick: () => openQuickSaleModal(),
+                  },
+                  {
+                    label: t.actions.recordFeeding,
+                    tone: 'bg-[#1D72E8] text-white',
+                    onClick: () => {
+                      setFabOpen(false);
+                      setQuickAction('feeding');
+                    },
+                  },
+                  {
+                    label: t.actions.recordWaterQuality,
+                    tone: 'bg-cyan-600 text-white',
+                    onClick: () => {
+                      setFabOpen(false);
+                      setQuickAction('water');
+                    },
+                  },
+                  {
+                    label: t.actions.planHarvest,
+                    tone: 'bg-amber-600 text-white',
+                    onClick: () => openHarvestModal(),
+                  },
+                  {
+                    label: t.actions.addInventory,
+                    tone: 'bg-slate-800 text-white dark:bg-slate-700',
+                    onClick: () => openInventoryModal(),
+                  },
+                ].map((act) => (
+                  <button
+                    key={act.label}
+                    type="button"
+                    onClick={act.onClick}
+                    className={`min-h-[40px] rounded-full px-4 py-2 text-xs font-bold shadow-lg ${act.tone}`}
+                  >
+                    {act.label}
+                  </button>
+                ))}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        <motion.button
+          type="button"
+          onClick={() => {
+            triggerHaptic(8);
+            setFabOpen((prev) => !prev);
+          }}
+          whileTap={{ scale: 0.92 }}
+          animate={{ rotate: fabOpen ? 45 : 0 }}
+          transition={SPRING_SNAPPY}
+          aria-label="Quick add action"
+          className="fixed right-3.5 bottom-[70px] z-50 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg ring-2 ring-white dark:ring-slate-900"
+        >
+          <Plus className="h-5 w-5" />
+        </motion.button>
+      </div>
+
+      {/* MOBILE BOTTOM NAVIGATION BAR (Feed, Water, Sale, Mortality, Tasks) */}
+      <nav
+        aria-label="Mobile quick actions navigation"
+        className="no-print pb-safe fixed inset-x-0 bottom-0 z-40 grid h-14 grid-cols-5 border-t border-slate-200/90 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
+      >
+        {[
+          {
+            id: 'feed',
+            label: t.ui.mobileFeed,
+            icon: Utensils,
+            active: quickAction === 'feeding' || activeNav === 'feeding',
+            onClick: () => setQuickAction('feeding'),
+          },
+          {
+            id: 'water',
+            label: t.ui.mobileWater,
+            icon: Droplets,
+            active: quickAction === 'water' || activeNav === 'water-quality',
+            onClick: () => setQuickAction('water'),
+          },
+          {
+            id: 'sale',
+            label: t.ui.mobileSale,
+            icon: ShoppingBag,
+            active: quickSaleOpen || activeNav === 'harvest-sales',
+            onClick: () => openQuickSaleModal(),
+          },
+          {
+            id: 'mortality',
+            label: t.ui.mobileMortality,
+            icon: HeartPulse,
+            active: quickAction === 'mortality' || activeNav === 'fish-health',
+            onClick: () => setQuickAction('mortality'),
+          },
+          {
+            id: 'tasks',
+            label: t.ui.mobileTasks,
+            icon: Bell,
+            badge: openTasksAlertsCount,
+            active: activeNav === 'tasks-alerts',
+            onClick: () => setActiveNav('tasks-alerts'),
+          },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onClick}
+              className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
+                item.active
+                  ? 'text-[#1D72E8] dark:text-sky-400'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              {item.active && (
+                <motion.span
+                  layoutId="mobile-bottom-active"
+                  transition={SPRING_SNAPPY}
+                  className="absolute top-0 h-0.5 w-8 rounded-full bg-[#1D72E8] dark:bg-sky-400"
+                />
+              )}
+              <div className="relative">
+                <Icon className="h-4 w-4" />
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white tabular-nums">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* MODALS */}
       <QuickActionModals
         activeModal={quickAction}
         state={state}
-        onClose={() => setQuickAction(null)}
+        initialInventoryItemId={inventoryInitialItemId}
+        initialHarvestPondCode={harvestInitialPondCode}
+        onClose={() => {
+          setQuickAction(null);
+          setInventoryInitialItemId(null);
+          setHarvestInitialPondCode(null);
+        }}
         onRecordFeeding={handleRecordFeeding}
         onAddInventory={handleAddInventory}
         onRecordWater={handleRecordWater}
         onReportMortality={handleReportMortality}
         onRecordHarvest={handleRecordHarvest}
+        onOpenQuickSaleForLot={(lotId) => openQuickSaleModal({ lotId })}
+      />
+
+      <QuickSaleFlow
+        open={quickSaleOpen}
+        state={state}
+        language={language}
+        initialLotId={quickSaleInitialLotId}
+        initialPondCode={quickSaleInitialPondCode}
+        initialPreOrder={quickSalePreOrder}
+        onClose={() => {
+          setQuickSaleOpen(false);
+          setQuickSaleInitialLotId(undefined);
+          setQuickSaleInitialPondCode(undefined);
+          setQuickSalePreOrder(null);
+        }}
+        onBackToMenu={() => setActiveNav('dashboard')}
+        onQuickCreateCustomer={handleQuickCreateCustomer}
+        onSubmitSale={handleCreateQuickSale}
+      />
+
+      <InvoiceReceiptModal
+        sale={activeReceiptSale}
+        state={state}
+        language={language}
+        onClose={() => setActiveReceiptSaleId(null)}
       />
 
       <PondQrModal
@@ -1363,4 +2900,12 @@ export default function App() {
       />
     </div>
   );
+}
+
+function prevUserName(s: AquacultureState): string {
+  return s.activeUser.name;
+}
+
+function formatTzsInline(val: number): string {
+  return `TZS ${Math.round(val).toLocaleString()}`;
 }

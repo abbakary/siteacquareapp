@@ -6,6 +6,7 @@ export type NavSection =
   | 'dashboard'
   | 'farms-ponds'
   | 'fish-species'
+  | 'fish-stock'
   | 'feeding'
   | 'water-quality'
   | 'fish-health'
@@ -215,6 +216,7 @@ export interface HealthIncident {
 
 export interface InventoryItem {
   id: string;
+  sku?: string;
   name: string;
   category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment';
   stock: number;
@@ -224,21 +226,29 @@ export interface InventoryItem {
   batchOrLot: string;
   supplier: string;
   expiryDate?: string;
+  lastRestockedDate?: string;
+  notes?: string;
   status: 'In Stock' | 'Low Stock' | 'Out of Stock';
 }
 
 export interface StockPurchaseRecord {
   id: string;
   date: string;
+  itemId?: string;
   itemName: string;
   category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment';
   quantity: number;
   unit: string;
   unitCostTzs: number;
   totalCostTzs: number;
+  paidAmountTzs?: number;
   supplier: string;
+  supplierPhone?: string;
+  invoiceNo?: string;
   lotNumber: string;
+  expiryDate?: string;
   paymentStatus: 'Paid' | 'Credit Debt' | 'Partial';
+  notes?: string;
   recordedBy: string;
 }
 
@@ -339,6 +349,145 @@ export interface PendingSyncItem {
   summary: string;
 }
 
+export type CustomerType = 'Market' | 'Hotel/Restaurant' | 'Retailer' | 'Individual' | 'Wholesaler';
+
+export type PriceTier = 'Wholesale' | 'Hotel/HORECA' | 'Retail' | 'Standard';
+
+export type FishGrade = 'Large' | 'Medium' | 'Small';
+
+export type PaymentMethod =
+  | 'Cash'
+  | 'M-Pesa'
+  | 'Tigo Pesa'
+  | 'Airtel Money'
+  | 'Halopesa'
+  | 'Bank Transfer'
+  | 'Cheque';
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string; // Normalized 255XXXXXXXXX
+  type: CustomerType;
+  location: string;
+  priceTier: PriceTier;
+  creditLimitTzs: number;
+  paymentTermsDays: number;
+  notes: string;
+  createdAt: string;
+}
+
+export interface PriceListItem {
+  id: string;
+  species: string;
+  grade: FishGrade;
+  tier: PriceTier;
+  pricePerKgTzs: number;
+  validFrom: string;
+}
+
+export interface HarvestLot {
+  id: string;
+  lotCode: string; // e.g. LOT-2026-0001
+  date: string;
+  pondCode: string;
+  batchCode: string;
+  species: string;
+  grades: {
+    largeKg: number;
+    largeCount: number;
+    mediumKg: number;
+    mediumCount: number;
+    smallKg: number;
+    smallCount: number;
+    damagedKg: number;
+  };
+  remainingKg: {
+    large: number;
+    medium: number;
+    small: number;
+  };
+  remainingCount: {
+    large: number;
+    medium: number;
+    small: number;
+  };
+  approvedBy: string;
+  source?: 'Harvest' | 'Manual Stock' | 'Direct Pond Sale';
+  notes?: string;
+}
+
+export interface SaleLine {
+  lotId: string;
+  pondCode: string;
+  batchCode: string;
+  species: string;
+  grade: FishGrade;
+  kg: number;
+  count: number;
+  pricePerKgTzs: number;
+  amountTzs: number;
+}
+
+export interface Sale {
+  id: string;
+  invoiceNo: string; // e.g. INV-2026-0001
+  date: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  lines: SaleLine[];
+  subtotalTzs: number;
+  discountTzs: number;
+  discountReason?: string;
+  taxRatePct?: number;
+  taxTzs?: number;
+  totalTzs: number;
+  paidTzs: number;
+  balanceTzs: number;
+  paymentStatus: 'Paid' | 'Partial' | 'Credit';
+  deliveryStatus: 'Pending Dispatch' | 'In Transit' | 'Delivered';
+  deliveryAddress: string;
+  vehicleOrDriver: string;
+  createdBy: string;
+  approvedBy: string;
+  fiscalReceiptNo?: string;
+  idempotencyKey?: string;
+  backendConfirmationId?: string;
+}
+
+export interface Payment {
+  id: string;
+  saleId: string;
+  date: string;
+  amountTzs: number;
+  method: PaymentMethod;
+  reference: string;
+  receivedBy: string;
+}
+
+export interface PreOrder {
+  id: string;
+  date: string;
+  expectedDate: string;
+  customerId: string;
+  species: string;
+  grade: FishGrade;
+  requestedKg: number;
+  agreedPricePerKgTzs: number;
+  depositTzs: number;
+  notes: string;
+  status: 'Open' | 'Converted' | 'Cancelled';
+  convertedSaleId?: string;
+}
+
+export interface SalesPreferences {
+  lastCustomerId?: string;
+  lastPaymentMethod?: PaymentMethod;
+  lastPricesByKey?: Record<string, number>;
+  pinThresholdTzs: number;
+}
+
 export interface AquacultureState {
   activeUser: Employee;
   employees: Employee[];
@@ -354,6 +503,14 @@ export interface AquacultureState {
   inventory: InventoryItem[];
   stockPurchases: StockPurchaseRecord[];
   harvests: HarvestRecord[];
+  customers: Customer[];
+  priceList: PriceListItem[];
+  harvestLots: HarvestLot[];
+  sales: Sale[];
+  payments: Payment[];
+  preOrders: PreOrder[];
+  salesPreferences: SalesPreferences;
+  invoiceSequence: number;
   finances: FinanceTransaction[];
   tasks: FarmTask[];
   alerts: SystemAlert[];

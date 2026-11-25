@@ -1,66 +1,120 @@
 import { Language } from '../types/aquaculture';
 
-export const TRANSLATIONS: Record<
-  Language,
-  {
-    brandTagline: string;
-    heroTitle: string;
-    heroSubtitle: string;
-    nav: {
-      dashboard: string;
-      farmsPonds: string;
-      fishSpecies: string;
-      feeding: string;
-      waterQuality: string;
-      fishHealth: string;
-      harvestSales: string;
-      inventory: string;
-      finance: string;
-      employees: string;
-      tasksAlerts: string;
-      aquaIntelligence: string;
-      settings: string;
-      help: string;
+export interface AppTranslations {
+  brandTagline: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  nav: {
+    dashboard: string;
+    farmsPonds: string;
+    fishSpecies: string;
+    fishStock: string;
+    feeding: string;
+    waterQuality: string;
+    fishHealth: string;
+    harvestSales: string;
+    inventory: string;
+    finance: string;
+    employees: string;
+    tasksAlerts: string;
+    aquaIntelligence: string;
+    settings: string;
+    help: string;
+  };
+  kpi: {
+    totalLiveFish: string;
+    activePonds: string;
+    feedStock: string;
+    totalRevenue: string;
+  };
+  widgets: {
+    farmOverview: string;
+    waterQualityStatus: string;
+    fishHealthMonitor: string;
+    inventoryManagement: string;
+    recentActivities: string;
+    pondStatus: string;
+    quickActions: string;
+    salesFinance: string;
+    alertsNotifications: string;
+    farmMap: string;
+    viewAll: string;
+    viewDetails: string;
+  };
+  actions: {
+    recordFeeding: string;
+    addInventory: string;
+    recordWaterQuality: string;
+    reportMortality: string;
+    planHarvest: string;
+    quickSale: string;
+    generateReport: string;
+    logout: string;
+    switchRole: string;
+  };
+  sales: {
+    title: string;
+    subtitle: string;
+    quickSaleBtn: string;
+    recordHarvestBtn: string;
+    exportCsvBtn: string;
+    kpiRevenue: string;
+    kpiKgSold: string;
+    kpiAvgPrice: string;
+    kpiReceivables: string;
+    tabs: {
+      sales: string;
+      customers: string;
+      priceList: string;
+      receivables: string;
+      lots: string;
+      preOrders: string;
     };
-    kpi: {
-      totalLiveFish: string;
-      activePonds: string;
-      feedStock: string;
-      totalRevenue: string;
+    steps: {
+      customer: string;
+      fish: string;
+      pay: string;
     };
-    widgets: {
-      farmOverview: string;
-      waterQualityStatus: string;
-      fishHealthMonitor: string;
-      inventoryManagement: string;
-      recentActivities: string;
-      pondStatus: string;
-      quickActions: string;
-      salesFinance: string;
-      alertsNotifications: string;
-      farmMap: string;
-      viewAll: string;
-      viewDetails: string;
-    };
-    actions: {
-      recordFeeding: string;
-      addInventory: string;
-      recordWaterQuality: string;
-      reportMortality: string;
-      planHarvest: string;
-      generateReport: string;
-      logout: string;
-      switchRole: string;
-    };
-    footer: {
-      p1: string;
-      p2: string;
-      p3: string;
-      p4: string;
-      slogan: string;
-    };
-  }
-> = {
+    invoice: string;
+    deliveryNote: string;
+    downloadPdf: string;
+    shareWhatsapp: string;
+    collectPayment: string;
+    remind: string;
+    newCustomer: string;
+    convertToSale: string;
+  };
+  ui: {
+    undo: string;
+    undone: string;
+    offlineBanner: string;
+    pendingQueueLabel: string;
+    syncNow: string;
+    syncingNow: string;
+    themeLabel: string;
+    themeLight: string;
+    themeDark: string;
+    themeSystem: string;
+    reduceAnimations: string;
+    reduceAnimationsHint: string;
+    lowEndAutoHint: string;
+    mobileFeed: string;
+    mobileWater: string;
+    mobileSale: string;
+    mobileMortality: string;
+    mobileTasks: string;
+    backToMenu: string;
+  };
+  footer: {
+    p1: string;
+    p2: string;
+    p3: string;
+    p4: string;
+    slogan: string;
+  };
+}
+
+export const TRANSLATIONS: Record<Language, AppTranslations> = {
   en: {
     brandTagline: 'Smart Aquaculture Management Tanzania',
     heroTitle: 'Innovative Aquaculture for a Prosperous Tanzania',
@@ -69,6 +123,7 @@ export const TRANSLATIONS: Record<
       dashboard: 'Dashboard',
       farmsPonds: 'Farm & Ponds',
       fishSpecies: 'Fish & Species',
+      fishStock: 'Fish Stock',
       feeding: 'Feeding Management',
       waterQuality: 'Water Quality',
       fishHealth: 'Fish Health',
@@ -106,10 +161,64 @@ export const TRANSLATIONS: Record<
       addInventory: 'Add Inventory',
       recordWaterQuality: 'Record Water Quality',
       reportMortality: 'Report Mortality',
-      planHarvest: 'Plan Harvest',
+      planHarvest: 'Record Harvest Lot',
+      quickSale: 'Quick Sale',
       generateReport: 'Generate Report',
       logout: 'Logout',
       switchRole: 'Switch Role',
+    },
+    sales: {
+      title: 'Harvest Lots, Customer Sales & Receivables',
+      subtitle: 'Sell graded harvest lots to multiple customers with price tiers, credit limits, payment history, invoices & delivery notes.',
+      quickSaleBtn: 'Quick Sale (30s)',
+      recordHarvestBtn: 'Record Harvest Lot',
+      exportCsvBtn: 'Export Sales CSV',
+      kpiRevenue: 'Sales Revenue',
+      kpiKgSold: 'Fish Sold (kg)',
+      kpiAvgPrice: 'Average Price / kg',
+      kpiReceivables: 'Total Receivables',
+      tabs: {
+        sales: 'Sales',
+        customers: 'Customers',
+        priceList: 'Price List',
+        receivables: 'Receivables',
+        lots: 'Lots in Stock',
+        preOrders: 'Pre-Orders',
+      },
+      steps: {
+        customer: '1. Customer',
+        fish: '2. Fish & Weight',
+        pay: '3. Pay & Dispatch',
+      },
+      invoice: 'Invoice & Receipt',
+      deliveryNote: 'Delivery Note',
+      downloadPdf: 'Download PDF / Print',
+      shareWhatsapp: 'Share via WhatsApp',
+      collectPayment: 'Collect Payment',
+      remind: 'Remind',
+      newCustomer: 'New Customer',
+      convertToSale: 'Convert to Sale',
+    },
+    ui: {
+      undo: 'Undo',
+      undone: 'Action undone.',
+      offlineBanner: 'Offline field mode active — changes are saved locally on this device.',
+      pendingQueueLabel: 'queued items waiting to sync',
+      syncNow: 'Sync Now',
+      syncingNow: 'Syncing...',
+      themeLabel: 'Appearance Theme',
+      themeLight: 'Light',
+      themeDark: 'Dark',
+      themeSystem: 'System',
+      reduceAnimations: 'Reduce animations (low-end phone mode)',
+      reduceAnimationsHint: 'Disables shimmer waves, count-up transitions, and parallax motion for smoother battery & low-RAM performance.',
+      lowEndAutoHint: 'Auto-enabled because this device has 4 or fewer CPU cores.',
+      mobileFeed: 'Feed',
+      mobileWater: 'Water',
+      mobileSale: 'Sale',
+      mobileMortality: 'Mortality',
+      mobileTasks: 'Tasks',
+      backToMenu: 'Back to Menu',
     },
     footer: {
       p1: 'Higher Productivity',
@@ -127,6 +236,7 @@ export const TRANSLATIONS: Record<
       dashboard: 'Dashibodi',
       farmsPonds: 'Mashamba na Mabwawa',
       fishSpecies: 'Samaki na Makundi',
+      fishStock: 'Akiba ya Samaki',
       feeding: 'Usimamizi wa Chakula',
       waterQuality: 'Ubora wa Maji',
       fishHealth: 'Afya ya Samaki',
@@ -164,10 +274,64 @@ export const TRANSLATIONS: Record<
       addInventory: 'Ongeza Bohari',
       recordWaterQuality: 'Rekodi Ubora wa Maji',
       reportMortality: 'Ripoti Vifo vya Samaki',
-      planHarvest: 'Panga Mavuno',
+      planHarvest: 'Rekodi Mavuno (Lot)',
+      quickSale: 'Uza Haraka',
       generateReport: 'Tengeneza Ripoti',
       logout: 'Ondoka',
       switchRole: 'Badilisha Wajibu',
+    },
+    sales: {
+      title: 'Mavuno, Mauzo kwa Wateja na Madeni',
+      subtitle: 'Uza mavuno kwa wateja wengi kwa bei za daraja, vikomo vya mkopo, historia ya malipo, ankara na hati za usafirishaji.',
+      quickSaleBtn: 'Uza Haraka (30s)',
+      recordHarvestBtn: 'Rekodi Mavuno (Lot)',
+      exportCsvBtn: 'Pakua CSV ya Mauzo',
+      kpiRevenue: 'Mapato ya Mauzo',
+      kpiKgSold: 'Kilo Zilizouzwa',
+      kpiAvgPrice: 'Bei ya Wastani / kg',
+      kpiReceivables: 'Jumla ya Madeni',
+      tabs: {
+        sales: 'Mauzo',
+        customers: 'Wateja',
+        priceList: 'Orodha ya Bei',
+        receivables: 'Madeni',
+        lots: 'Akiba ya Mavuno',
+        preOrders: 'Oda za Awali',
+      },
+      steps: {
+        customer: '1. Mteja',
+        fish: '2. Samaki na Uzito',
+        pay: '3. Malipo na Usafiri',
+      },
+      invoice: 'Ankara na Risiti',
+      deliveryNote: 'Hati ya Uwasilishaji',
+      downloadPdf: 'Pakua PDF / Chapisha',
+      shareWhatsapp: 'Tuma WhatsApp',
+      collectPayment: 'Pokea Malipo',
+      remind: 'Kumbusha',
+      newCustomer: 'Mteja Mpya',
+      convertToSale: 'Geuza Kuwa Mauzo',
+    },
+    ui: {
+      undo: 'Tengua',
+      undone: 'Kitendo kimetenguliwa.',
+      offlineBanner: 'Hali ya nje ya mtandao — rekodi zinahifadhiwa kwenye kifaa hiki.',
+      pendingQueueLabel: 'kumbukumbu zinasubiri kutumwa',
+      syncNow: 'Sawazisha Sasa',
+      syncingNow: 'Inasawazisha...',
+      themeLabel: 'Mwonekano (Theme)',
+      themeLight: 'Mwangaza',
+      themeDark: 'Giza',
+      themeSystem: 'Kifaa',
+      reduceAnimations: 'Punguza michoro (simu za uwezo mdogo)',
+      reduceAnimationsHint: 'Huzima mawimbi na michoro ya ziada ili kuokoa betri na kuongeza kasi.',
+      lowEndAutoHint: 'Imewashwa kiotomatiki kwa sababu kifaa kina CPU 4 au chini.',
+      mobileFeed: 'Chakula',
+      mobileWater: 'Maji',
+      mobileSale: 'Uza',
+      mobileMortality: 'Vifo',
+      mobileTasks: 'Kazi',
+      backToMenu: 'Rudi kwenye Menyu',
     },
     footer: {
       p1: 'Uzalishaji Mkubwa',

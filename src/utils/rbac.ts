@@ -13,6 +13,9 @@ export interface RolePermissions {
   canRequestTransfer: boolean;
   canApproveTransfer: boolean;
   canApproveHarvest: boolean;
+  canRecordSale: boolean;
+  canOverrideSalePrice: boolean;
+  canManageCustomers: boolean;
   canViewFullFinance: boolean;
   canManageEmployees: boolean;
 }
@@ -31,6 +34,9 @@ export const ROLE_MATRIX: Record<UserRole, RolePermissions> = {
     canRequestTransfer: true,
     canApproveTransfer: true,
     canApproveHarvest: true,
+    canRecordSale: true,
+    canOverrideSalePrice: true,
+    canManageCustomers: true,
     canViewFullFinance: true,
     canManageEmployees: true,
   },
@@ -47,6 +53,9 @@ export const ROLE_MATRIX: Record<UserRole, RolePermissions> = {
     canRequestTransfer: true,
     canApproveTransfer: true,
     canApproveHarvest: true,
+    canRecordSale: true,
+    canOverrideSalePrice: true,
+    canManageCustomers: true,
     canViewFullFinance: true,
     canManageEmployees: true,
   },
@@ -63,6 +72,9 @@ export const ROLE_MATRIX: Record<UserRole, RolePermissions> = {
     canRequestTransfer: true,
     canApproveTransfer: false,
     canApproveHarvest: false,
+    canRecordSale: false,
+    canOverrideSalePrice: false,
+    canManageCustomers: false,
     canViewFullFinance: false,
     canManageEmployees: false,
   },
@@ -79,6 +91,9 @@ export const ROLE_MATRIX: Record<UserRole, RolePermissions> = {
     canRequestTransfer: true,
     canApproveTransfer: false,
     canApproveHarvest: false,
+    canRecordSale: true,
+    canOverrideSalePrice: false,
+    canManageCustomers: false,
     canViewFullFinance: false,
     canManageEmployees: false,
   },
@@ -95,6 +110,9 @@ export const ROLE_MATRIX: Record<UserRole, RolePermissions> = {
     canRequestTransfer: false,
     canApproveTransfer: false,
     canApproveHarvest: false,
+    canRecordSale: true,
+    canOverrideSalePrice: false,
+    canManageCustomers: true,
     canViewFullFinance: false,
     canManageEmployees: false,
   },

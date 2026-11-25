@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { Farm, Pond } from '../types/aquaculture';
+import { usePreferences } from '../ui';
 
 interface LeafletFarmMapProps {
   ponds: Pond[];
@@ -19,6 +20,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
   heightClass = 'h-[195px]',
   onSelectPond,
 }) => {
+  const { isDark } = usePreferences();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -141,10 +143,10 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
       const marker = L.marker(pond.gps, { icon }).addTo(group);
       marker.bindPopup(
         `<div style="min-width:165px;font-size:12px;line-height:1.45;">
-          <div style="font-weight:700;color:#0f172a;margin-bottom:2px;">${pond.name} (${pond.code})</div>
-          <div style="color:#475569;">Species: <strong>${pond.species}</strong></div>
-          <div style="color:#475569;">Live Fish: <strong>${pond.currentFish.toLocaleString()}</strong> / ${pond.maxCapacity.toLocaleString()}</div>
-          <div style="color:#475569;">Status: <strong>${pond.status}</strong> (${pond.readinessPct}%)</div>
+          <div style="font-weight:700;margin-bottom:2px;">${pond.name} (${pond.code})</div>
+          <div>Species: <strong>${pond.species}</strong></div>
+          <div>Live Fish: <strong>${pond.currentFish.toLocaleString()}</strong> / ${pond.maxCapacity.toLocaleString()}</div>
+          <div>Status: <strong>${pond.status}</strong> (${pond.readinessPct}%)</div>
         </div>`
       );
       if (onSelectPond) {
@@ -164,14 +166,18 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
   };
 
   return (
-    <div className={`relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 ${heightClass}`}>
+    <div
+      className={`relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800 ${
+        isDark && mapMode === 'map' ? 'leaflet-dark-tiles' : ''
+      } ${heightClass}`}
+    >
       <div ref={containerRef} className="h-full w-full" />
-      <div className="pointer-events-auto absolute bottom-2.5 right-2.5 z-[400] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
+      <div className="pointer-events-auto absolute bottom-2.5 right-2.5 z-[400] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md dark:border-slate-700 dark:bg-slate-900">
         <button
           type="button"
           onClick={handleZoomIn}
           aria-label="Zoom in farm map"
-          className="flex h-7 w-7 items-center justify-center border-b border-slate-200 text-base font-bold text-slate-700 hover:bg-slate-50"
+          className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-base font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           +
         </button>
@@ -179,7 +185,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
           type="button"
           onClick={handleZoomOut}
           aria-label="Zoom out farm map"
-          className="flex h-7 w-7 items-center justify-center text-base font-bold text-slate-700 hover:bg-slate-50"
+          className="flex h-8 w-8 items-center justify-center text-base font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           −
         </button>
