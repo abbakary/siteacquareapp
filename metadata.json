@@ -1,0 +1,6 @@
+{
+  "name": "DukaAquSmart",
+  "description": "Smart Aquaculture Management & Intelligence System for Tanzania — Full-traceability farm operations, fish batch lifecycle, feed accountability, water quality monitoring, health & biosecurity, harvest & sales, TZS financials, and Leaflet farm mapping.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
