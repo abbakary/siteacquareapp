@@ -54,10 +54,11 @@ export const Button: React.FC<ButtonProps> = ({
     <motion.button
       type={type}
       disabled={isDisabled}
+      whileHover={isDisabled ? undefined : { scale: 1.015 }}
       whileTap={isDisabled ? undefined : { scale: 0.97 }}
-      transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
+      transition={{ duration: DURATIONS.button, ease: EASE_OUT }}
       className={cn(
-        'inline-flex items-center justify-center gap-1.5 font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50',
         VARIANT_CLASSES[success ? 'success' : variant],
         SIZE_CLASSES[size],
         fullWidth && 'w-full',

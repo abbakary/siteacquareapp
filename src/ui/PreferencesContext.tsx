@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { MotionConfig, useReducedMotion } from 'motion/react';
+import type { Language } from '../types/aquaculture';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 interface UiPreferences {
   themeMode: ThemeMode;
   reduceAnimations: boolean;
+  language: Language;
 }
 
 interface PreferencesContextValue {
@@ -14,9 +16,11 @@ interface PreferencesContextValue {
   reduceAnimations: boolean;
   effectiveReducedMotion: boolean;
   lowEndDeviceDetected: boolean;
+  language: Language;
   setThemeMode: (mode: ThemeMode) => void;
   cycleThemeMode: () => void;
   setReduceAnimations: (reduce: boolean) => void;
+  setLanguage: (lang: Language) => void;
   triggerHaptic: (durationMs?: number) => void;
 }
 
@@ -40,6 +44,7 @@ function loadInitialPrefs(): UiPreferences {
             : 'light',
         reduceAnimations:
           typeof parsed.reduceAnimations === 'boolean' ? parsed.reduceAnimations : lowEnd,
+        language: parsed.language === 'en' || parsed.language === 'sw' ? parsed.language : 'sw',
       };
     }
   } catch {
@@ -48,6 +53,7 @@ function loadInitialPrefs(): UiPreferences {
   return {
     themeMode: 'light',
     reduceAnimations: lowEnd,
+    language: 'sw',
   };
 }
 
@@ -87,7 +93,12 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const root = document.documentElement;
     root.classList.toggle('dark', isDark);
     root.classList.toggle('reduce-motion', effectiveReducedMotion);
-  }, [isDark, effectiveReducedMotion]);
+    root.lang = prefs.language;
+    document.title =
+      prefs.language === 'sw'
+        ? 'DukaAquSmart — Mfumo Mahiri wa Ufugaji Samaki Tanzania'
+        : 'DukaAquSmart — Smart Aquaculture Management Tanzania';
+  }, [isDark, effectiveReducedMotion, prefs.language]);
 
   const setThemeMode = (themeMode: ThemeMode) => {
     setPrefs((prev) => ({ ...prev, themeMode }));
@@ -103,6 +114,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const setReduceAnimations = (reduceAnimations: boolean) => {
     setPrefs((prev) => ({ ...prev, reduceAnimations }));
+  };
+
+  const setLanguage = (language: Language) => {
+    setPrefs((prev) => ({ ...prev, language }));
   };
 
   const triggerHaptic = (durationMs = 10) => {
@@ -122,9 +137,11 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
     reduceAnimations: prefs.reduceAnimations,
     effectiveReducedMotion,
     lowEndDeviceDetected,
+    language: prefs.language,
     setThemeMode,
     cycleThemeMode,
     setReduceAnimations,
+    setLanguage,
     triggerHaptic,
   };
 
@@ -146,11 +163,23 @@ export function usePreferences(): PreferencesContextValue {
       reduceAnimations: false,
       effectiveReducedMotion: false,
       lowEndDeviceDetected: false,
+      language: 'sw',
       setThemeMode: () => {},
       cycleThemeMode: () => {},
       setReduceAnimations: () => {},
+      setLanguage: () => {},
       triggerHaptic: () => {},
     };
   }
   return ctx;
+}
+
+export function useLanguage() {
+  const { language, setLanguage } = usePreferences();
+  return {
+    language,
+    setLanguage,
+    isSw: language === 'sw',
+    t: (sw: string, en: string) => (language === 'sw' ? sw : en),
+  };
 }

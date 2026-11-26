@@ -12,6 +12,7 @@ import {
   SaleLine,
 } from '../types/aquaculture';
 import { formatTzs, todayIso } from './formatters';
+import { tDomain } from '../i18n/translations';
 import { measureAndValidatePolygon } from './gisGeometry';
 
 /**
@@ -147,7 +148,7 @@ export function buildWhatsAppInvoiceUrl(
 
   const body =
     language === 'sw'
-      ? `*${farmName} — Risiti ya Mauzo*\nAnkara: ${sale.invoiceNo}\nTarehe: ${sale.date}\nMteja: ${sale.customerName}\n\n${linesText}\n\n${taxLineSw}Jumla: ${formatTzs(sale.totalTzs)}\nImelipwa: ${formatTzs(sale.paidTzs)}\nBaki: ${formatTzs(sale.balanceTzs)}\nUwasilishaji: ${sale.deliveryStatus}`
+      ? `*${farmName} — Risiti ya Mauzo*\nAnkara: ${sale.invoiceNo}\nTarehe: ${sale.date}\nMteja: ${sale.customerName}\n\n${linesText}\n\n${taxLineSw}Jumla: ${formatTzs(sale.totalTzs)}\nImelipwa: ${formatTzs(sale.paidTzs)}\nBaki: ${formatTzs(sale.balanceTzs)}\nUwasilishaji: ${tDomain('sw', sale.deliveryStatus)}`
       : `*${farmName} — Sales Receipt*\nInvoice: ${sale.invoiceNo}\nDate: ${sale.date}\nCustomer: ${sale.customerName}\n\n${linesText}\n\n${taxLineEn}Total: ${formatTzs(sale.totalTzs)}\nPaid: ${formatTzs(sale.paidTzs)}\nBalance Due: ${formatTzs(sale.balanceTzs)}\nDelivery: ${sale.deliveryStatus}`;
 
   return `https://wa.me/${phone}?text=${encodeURIComponent(body)}`;
@@ -172,7 +173,10 @@ export function buildWhatsAppReminderUrl(
  * Replace this stub with an authenticated server-side adapter call to a licensed
  * TRA VFD/EFD provider once fiscal credentials and TIN/VRN config are available.
  */
-export function issueFiscalReceipt(sale: Sale): {
+export function issueFiscalReceipt(
+  sale: Sale,
+  language: Language = 'sw'
+): {
   supported: boolean;
   status: 'Not Configured' | 'Issued';
   receiptNo?: string;
@@ -183,14 +187,19 @@ export function issueFiscalReceipt(sale: Sale): {
       supported: true,
       status: 'Issued',
       receiptNo: sale.fiscalReceiptNo,
-      message: `Fiscal receipt ${sale.fiscalReceiptNo} attached.`,
+      message:
+        language === 'sw'
+          ? `Risiti ya kodi (TRA) ${sale.fiscalReceiptNo} imeambatanishwa.`
+          : `Fiscal receipt ${sale.fiscalReceiptNo} attached.`,
     };
   }
   return {
     supported: false,
     status: 'Not Configured',
     message:
-      'TRA EFD/VFD fiscal adapter not configured. Commercial invoice & delivery note generated; connect a licensed TRA VFD provider via server adapter when ready.',
+      language === 'sw'
+        ? 'Mfumo wa TRA EFD/VFD haujaunganishwa bado. Ankara ya kibiashara na hati ya uwasilishaji zimetengenezwa; unganisha mtoa huduma wa TRA VFD kupitia seva ukiwa tayari.'
+        : 'TRA EFD/VFD fiscal adapter not configured. Commercial invoice & delivery note generated; connect a licensed TRA VFD provider via server adapter when ready.',
   };
 }
 

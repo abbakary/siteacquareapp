@@ -14,7 +14,7 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({
   children,
   className,
 }) => {
-  const { effectiveReducedMotion, triggerHaptic } = usePreferences();
+  const { effectiveReducedMotion, triggerHaptic, language } = usePreferences();
   const startYRef = useRef<number | null>(null);
   const [pullPx, setPullPx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,7 +71,15 @@ export const PullToRefresh: React.FC<PullToRefreshProps> = ({
           }
         >
           <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
-          <span>{refreshing ? 'Refreshing farm records...' : 'Release to refresh'}</span>
+          <span>
+            {refreshing
+              ? language === 'sw'
+                ? 'Inasasisha kumbukumbu za shamba...'
+                : 'Refreshing farm records...'
+              : language === 'sw'
+                ? 'Achilia kusasisha'
+                : 'Release to refresh'}
+          </span>
         </div>
       )}
       {children}

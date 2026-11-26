@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Fish, ArrowRightLeft, Scale, Plus, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { AquacultureState } from '../../types/aquaculture';
+import { tDomain, tr } from '../../i18n/translations';
 import { formatNumber } from '../../utils/formatters';
 import {
   Badge,
@@ -13,6 +14,7 @@ import {
   FormError,
   getStaggerDelay,
   INPUT_CLASS,
+  useLanguage,
 } from '../../ui';
 
 interface FishSpeciesModuleProps {
@@ -45,6 +47,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
   onTransferBatch,
   onRecordGrowthSample,
 }) => {
+  const { language } = useLanguage();
   const [selectedBatchId, setSelectedBatchId] = useState(state.batches[0]?.id || '');
   const [showStockForm, setShowStockForm] = useState(false);
   const [stockSpecies, setStockSpecies] = useState('Nile Tilapia');
@@ -73,14 +76,22 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-            Module B: Fish Batch Lifecycle, Transfers & Growth Intelligence
+            {tr(
+              language,
+              'Moduli B: Mzunguko wa Maisha wa Kundi la Samaki, Uhamisho na Ukuaji',
+              'Module B: Fish Batch Lifecycle, Transfers & Growth Intelligence'
+            )}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Every fingerling batch carries an immutable lifecycle ID. Transfers preserve original pond history and enforce capacity limits.
+            {tr(
+              language,
+              'Kila kundi la vifaranga lina msimbo wa kudumu. Uhamisho huhifadhi historia ya bwawa la awali na kudhibiti uwezo wa bwawa.',
+              'Every fingerling batch carries an immutable lifecycle ID. Transfers preserve original pond history and enforce capacity limits.'
+            )}
           </p>
         </div>
         <Button variant="primary" size="sm" onClick={() => setShowStockForm(!showStockForm)}>
-          <Plus className="h-4 w-4" /> Stock New Fish Batch
+          <Plus className="h-4 w-4" /> {tr(language, 'Ingiza Kundi Jipya la Samaki', 'Stock New Fish Batch')}
         </Button>
       </Card>
 
@@ -105,12 +116,12 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
           >
             <Card className="border-blue-200 dark:border-sky-800/60">
               <h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">
-                Register & Stock Fingerling Batch
+                {tr(language, 'Sajili na Pandikiza Kundi la Vifaranga', 'Register & Stock Fingerling Batch')}
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Species
+                    {tr(language, 'Aina ya Samaki', 'Species')}
                   </label>
                   <select
                     value={stockSpecies}
@@ -119,14 +130,14 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                   >
                     {state.speciesCatalogue.map((s) => (
                       <option key={s.id} value={s.commonName}>
-                        {s.commonName} ({s.scientificName})
+                        {language === 'sw' ? `${s.swahiliName} / ${s.commonName}` : s.commonName} ({s.scientificName})
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Target Pond
+                    {tr(language, 'Bwawa Lengwa', 'Target Pond')}
                   </label>
                   <select
                     value={stockPond}
@@ -135,14 +146,14 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                   >
                     {state.ponds.map((p) => (
                       <option key={p.id} value={p.code}>
-                        {p.code} (Avail: {formatNumber(p.maxCapacity - p.currentFish)})
+                        {p.code} ({tr(language, 'Nafasi', 'Avail')}: {formatNumber(p.maxCapacity - p.currentFish)})
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Fingerling Quantity
+                    {tr(language, 'Idadi ya Vifaranga', 'Fingerling Quantity')}
                   </label>
                   <input
                     type="number"
@@ -153,7 +164,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Avg Initial Weight (g)
+                    {tr(language, 'Uzito wa Awali (g)', 'Avg Initial Weight (g)')}
                   </label>
                   <input
                     type="number"
@@ -164,7 +175,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Source Hatchery
+                    {tr(language, 'Kitalu Chanzo (Hatchery)', 'Source Hatchery')}
                   </label>
                   <input
                     type="text"
@@ -175,7 +186,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Supplier
+                    {tr(language, 'Msambazaji', 'Supplier')}
                   </label>
                   <input
                     type="text"
@@ -187,7 +198,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
               </div>
               <div className="mt-3 flex justify-end gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setShowStockForm(false)}>
-                  Cancel
+                  {tr(language, 'Ghairi', 'Cancel')}
                 </Button>
                 <Button
                   variant="success"
@@ -202,18 +213,25 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                       supplier: stockSupplier,
                     });
                     if (!res.ok) {
-                      setStatusMsg({ type: 'err', text: res.error || 'Capacity exceeded' });
+                      setStatusMsg({
+                        type: 'err',
+                        text: res.error || tr(language, 'Uwezo wa bwawa umezidi', 'Capacity exceeded'),
+                      });
                       setErrShake((n) => n + 1);
                       return;
                     }
                     setStatusMsg({
                       type: 'ok',
-                      text: `Batch stocked into ${stockPond} with immutable ID.`,
+                      text: tr(
+                        language,
+                        `Kundi limepandikizwa katika ${stockPond} kwa msimbo wa kudumu.`,
+                        `Batch stocked into ${stockPond} with immutable ID.`
+                      ),
                     });
                     setShowStockForm(false);
                   }}
                 >
-                  Verify & Stock Batch
+                  {tr(language, 'Hakiki na Pandikiza Kundi', 'Verify & Stock Batch')}
                 </Button>
               </div>
             </Card>
@@ -250,7 +268,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                     </span>
                   </div>
                   <Badge variant={b.status === 'Harvest Ready' ? 'success' : 'info'}>
-                    {b.status}
+                    {tDomain(language, b.status)}
                   </Badge>
                 </div>
                 <div className="mt-1 text-xs font-semibold text-slate-800 dark:text-slate-200">
@@ -261,11 +279,11 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 </div>
                 <div className="mt-2 grid grid-cols-4 gap-2 text-[11px] text-slate-600 dark:text-slate-400">
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500">Pond</div>
+                    <div className="text-slate-400 dark:text-slate-500">{tr(language, 'Bwawa', 'Pond')}</div>
                     <div className="font-bold text-slate-800 dark:text-slate-200">{b.pondCode}</div>
                   </div>
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500">Est. Live</div>
+                    <div className="text-slate-400 dark:text-slate-500">{tr(language, 'Kadirio Hai', 'Est. Live')}</div>
                     <div className="font-bold text-slate-800 tabular-nums dark:text-slate-200">
                       <CountUpNumber
                         value={b.currentEstimatedFish}
@@ -274,13 +292,13 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500">Survival</div>
+                    <div className="text-slate-400 dark:text-slate-500">{tr(language, 'Uhai', 'Survival')}</div>
                     <div className="font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
                       <CountUpNumber value={survival} decimals={1} suffix="%" />
                     </div>
                   </div>
                   <div>
-                    <div className="text-slate-400 dark:text-slate-500">Biomass</div>
+                    <div className="text-slate-400 dark:text-slate-500">{tr(language, 'Uzito Hai', 'Biomass')}</div>
                     <div className="font-bold text-slate-800 tabular-nums dark:text-slate-200">
                       <CountUpNumber
                         value={biomassKg}
@@ -308,24 +326,27 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                     {selectedBatch.species} — {selectedBatch.pondCode}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Hatchery: {selectedBatch.sourceHatchery} · Supplier: {selectedBatch.supplier} · Keeper:{' '}
-                    {selectedBatch.responsibleKeeper}
+                    {tr(language, 'Kitalu', 'Hatchery')}: {selectedBatch.sourceHatchery} ·{' '}
+                    {tr(language, 'Msambazaji', 'Supplier')}: {selectedBatch.supplier} ·{' '}
+                    {tr(language, 'Msimamizi', 'Keeper')}: {selectedBatch.responsibleKeeper}
                   </p>
                 </div>
                 <div className="text-right text-xs">
-                  <div className="text-slate-500 dark:text-slate-400">Estimated vs Verified</div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    {tr(language, 'Kadirio dhidi ya Uhakiki', 'Estimated vs Verified')}
+                  </div>
                   <div className="font-bold text-slate-900 tabular-nums dark:text-white">
-                    {formatNumber(selectedBatch.currentEstimatedFish)} est /{' '}
-                    {formatNumber(selectedBatch.physicallyVerifiedFish)} verified
+                    {formatNumber(selectedBatch.currentEstimatedFish)} {tr(language, 'kadirio', 'est')} /{' '}
+                    {formatNumber(selectedBatch.physicallyVerifiedFish)} {tr(language, 'halisi', 'verified')}
                   </div>
                   <div className="text-[11px] text-slate-400 dark:text-slate-500">
-                    Last sampled {selectedBatch.lastVerifiedDate}
+                    {tr(language, 'Sampuli ya mwisho', 'Last sampled')} {selectedBatch.lastVerifiedDate}
                   </div>
                 </div>
               </div>
 
               <h4 className="mt-3 mb-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                Immutable Batch History
+                {tr(language, 'Historia Isiyobadilika ya Kundi', 'Immutable Batch History')}
               </h4>
               <div className="space-y-2.5">
                 {selectedBatch.history.map((ev) => (
@@ -351,13 +372,13 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 <div className="mb-2.5 flex items-center gap-2">
                   <Scale className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                    Record Growth Sample
+                    {tr(language, 'Rekodi Sampuli ya Ukuaji', 'Record Growth Sample')}
                   </h4>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Sample Size (fish)
+                      {tr(language, 'Ukubwa wa Sampuli (samaki)', 'Sample Size (fish)')}
                     </label>
                     <input
                       type="number"
@@ -368,7 +389,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Avg Weight (g)
+                      {tr(language, 'Uzito Wastani (g)', 'Avg Weight (g)')}
                     </label>
                     <input
                       type="number"
@@ -391,11 +412,15 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                     });
                     setStatusMsg({
                       type: 'ok',
-                      text: `Recorded growth sample for ${selectedBatch.batchCode}: ${sampleAvgWeight}g avg weight.`,
+                      text: tr(
+                        language,
+                        `Sampuli ya ukuaji imerekodiwa kwa ${selectedBatch.batchCode}: wastani ${sampleAvgWeight}g.`,
+                        `Recorded growth sample for ${selectedBatch.batchCode}: ${sampleAvgWeight}g avg weight.`
+                      ),
                     });
                   }}
                 >
-                  Update Growth & Biomass
+                  {tr(language, 'Sasisha Ukuaji na Uzito Hai', 'Update Growth & Biomass')}
                 </Button>
               </Card>
 
@@ -403,13 +428,13 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 <div className="mb-2.5 flex items-center gap-2">
                   <ArrowRightLeft className="h-4 w-4 text-blue-600 dark:text-sky-400" />
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                    Pond-to-Pond Transfer (Preserves History)
+                    {tr(language, 'Uhamisho wa Bwawa kwa Bwawa (Huhifadhi Historia)', 'Pond-to-Pond Transfer (Preserves History)')}
                   </h4>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Destination Pond
+                      {tr(language, 'Bwawa Linakopelekwa', 'Destination Pond')}
                     </label>
                     <select
                       value={toPond}
@@ -427,7 +452,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Fish Count
+                      {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                     </label>
                     <input
                       type="number"
@@ -440,7 +465,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <input
                     type="text"
-                    placeholder="Reason"
+                    placeholder={tr(language, 'Sababu', 'Reason')}
                     value={transferReason}
                     onChange={(e) => setTransferReason(e.target.value)}
                     className={INPUT_CLASS}
@@ -448,7 +473,7 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                   <input
                     type="password"
                     maxLength={4}
-                    placeholder="Enter 4-digit PIN"
+                    placeholder={tr(language, 'Weka PIN ya namba 4', 'Enter 4-digit PIN')}
                     value={transferPin}
                     onChange={(e) => setTransferPin(e.target.value)}
                     className={`${INPUT_CLASS} font-mono`}
@@ -468,18 +493,25 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                       pin: transferPin,
                     });
                     if (!res.ok) {
-                      setStatusMsg({ type: 'err', text: res.error || 'Transfer rejected' });
+                      setStatusMsg({
+                        type: 'err',
+                        text: res.error || tr(language, 'Uhamisho umekataliwa', 'Transfer rejected'),
+                      });
                       setErrShake((n) => n + 1);
                       return;
                     }
                     setTransferPin('');
                     setStatusMsg({
                       type: 'ok',
-                      text: `Transferred ${transferCount} fish from ${selectedBatch.pondCode} to ${toPond}. History preserved.`,
+                      text: tr(
+                        language,
+                        `Samaki ${transferCount} wamehamishwa kutoka ${selectedBatch.pondCode} kwenda ${toPond}. Historia imehifadhiwa.`,
+                        `Transferred ${transferCount} fish from ${selectedBatch.pondCode} to ${toPond}. History preserved.`
+                      ),
                     });
                   }}
                 >
-                  Approve & Execute Transfer
+                  {tr(language, 'Idhinisha na Tekeleza Uhamisho', 'Approve & Execute Transfer')}
                 </Button>
               </Card>
             </div>
@@ -490,7 +522,11 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
       {/* Tanzania Species & FiRCIS Compliance Catalogue */}
       <Card>
         <h3 className="mb-2.5 text-sm font-bold text-slate-900 dark:text-white">
-          Tanzania Species & Fisheries (Aquaculture) Regulations 2024 Catalogue
+          {tr(
+            language,
+            'Katalogi ya Aina za Samaki na Kanuni za Uvuvi (Ufugaji Samaki) Tanzania 2024',
+            'Tanzania Species & Fisheries (Aquaculture) Regulations 2024 Catalogue'
+          )}
         </h3>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {state.speciesCatalogue.map((sp) => (
@@ -504,23 +540,25 @@ export const FishSpeciesModule: React.FC<FishSpeciesModuleProps> = ({
                 </span>
                 {sp.fircisPermitted ? (
                   <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> FiRCIS OK
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {tr(language, 'FiRCIS Sawa', 'FiRCIS OK')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
-                    <ShieldAlert className="h-3.5 w-3.5" /> Restricted
+                    <ShieldAlert className="h-3.5 w-3.5" /> {tr(language, 'Imedhibitiwa', 'Restricted')}
                   </span>
                 )}
               </div>
               <div className="italic text-slate-500 dark:text-slate-400">{sp.scientificName}</div>
               <div className="mt-2 space-y-0.5 text-slate-600 dark:text-slate-300">
                 <div>
-                  Temp: <strong>{sp.optimalTempRange}</strong> · DO Min:{' '}
+                  {tr(language, 'Joto', 'Temp')}: <strong>{sp.optimalTempRange}</strong> · {tr(language, 'Kiwango cha Chini DO', 'DO Min')}:{' '}
                   <strong>{sp.optimalDoMin} mg/L</strong>
                 </div>
                 <div>
-                  pH: <strong>{sp.optimalPhRange}</strong> · Cycle:{' '}
-                  <strong>{sp.typicalCycleDays} days</strong>
+                  pH: <strong>{sp.optimalPhRange}</strong> · {tr(language, 'Mzunguko', 'Cycle')}:{' '}
+                  <strong>
+                    {sp.typicalCycleDays} {tr(language, 'siku', 'days')}
+                  </strong>
                 </div>
               </div>
               <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">

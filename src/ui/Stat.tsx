@@ -8,30 +8,46 @@ interface CountUpNumberProps {
   durationMs?: number;
   prefix?: string;
   suffix?: string;
+  compact?: boolean;
   formatter?: (val: number) => string;
   className?: string;
+}
+
+function formatCompactNumber(val: number, decimals: number): string {
+  const abs = Math.abs(val);
+  if (abs >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(decimals || 1)}B`;
+  if (abs >= 1_000_000) return `${(val / 1_000_000).toFixed(decimals || 1)}M`;
+  if (abs >= 10_000) return `${(val / 1_000).toFixed(decimals || 1)}K`;
+  return val.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 export const CountUpNumber: React.FC<CountUpNumberProps> = ({
   value,
   decimals = 0,
-  durationMs = 600,
+  durationMs = 900,
   prefix = '',
   suffix = '',
+  compact = false,
   formatter,
   className,
 }) => {
   const { effectiveReducedMotion } = usePreferences();
-  const [displayValue, setDisplayValue] = useState<number>(value);
-  const prevValueRef = useRef<number>(value);
+  const safeTarget = Number.isFinite(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState<number>(
+    effectiveReducedMotion ? safeTarget : 0
+  );
+  const currentValueRef = useRef<number>(effectiveReducedMotion ? safeTarget : 0);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const startVal = prevValueRef.current;
+    const startVal = currentValueRef.current;
     const endVal = Number.isFinite(value) ? value : 0;
 
     if (effectiveReducedMotion || startVal === endVal) {
-      prevValueRef.current = endVal;
+      currentValueRef.current = endVal;
       setDisplayValue(endVal);
       return;
     }
@@ -45,19 +61,23 @@ export const CountUpNumber: React.FC<CountUpNumberProps> = ({
       // Cubic ease-out matching --ease-out feel
       const eased = 1 - Math.pow(1 - progress, 3);
       const next = startVal + diff * eased;
+      currentValueRef.current = next;
       setDisplayValue(next);
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        prevValueRef.current = endVal;
+        currentValueRef.current = endVal;
         setDisplayValue(endVal);
+        rafRef.current = null;
       }
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      prevValueRef.current = endVal;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [value, durationMs, effectiveReducedMotion]);
 
@@ -68,10 +88,12 @@ export const CountUpNumber: React.FC<CountUpNumberProps> = ({
 
   const formatted = formatter
     ? formatter(rounded)
-    : rounded.toLocaleString('en-US', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      });
+    : compact
+      ? formatCompactNumber(rounded, decimals)
+      : rounded.toLocaleString('en-US', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        });
 
   return (
     <span className={cn('tabular-nums', className)}>
@@ -88,10 +110,12 @@ interface StatProps {
   prefix?: string;
   suffix?: string;
   decimals?: number;
+  compact?: boolean;
   formatter?: (val: number) => string;
   hint?: string;
   icon?: React.ReactNode;
   accentClassName?: string;
+  hoverable?: boolean;
   className?: string;
 }
 
@@ -101,22 +125,29 @@ export const Stat: React.FC<StatProps> = ({
   prefix,
   suffix,
   decimals = 0,
+  compact = false,
   formatter,
   hint,
   icon,
   accentClassName = 'text-slate-900 dark:text-white',
+  hoverable = true,
   className,
 }) => {
   return (
     <div
       className={cn(
-        'rounded-[16px] border border-slate-200/90 bg-white p-3.5 shadow-rest dark:border-slate-800 dark:bg-slate-900',
+        'group rounded-[16px] border border-slate-200/90 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900',
+        hoverable ? 'shadow-hover-card' : 'shadow-rest',
         className
       )}
     >
       <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
         <span>{label}</span>
-        {icon}
+        {icon && (
+          <span className="transition-transform duration-150 group-hover:scale-110">
+            {icon}
+          </span>
+        )}
       </div>
       <div className={cn('mt-1 font-display text-lg font-extrabold tabular-nums', accentClassName)}>
         <CountUpNumber
@@ -124,6 +155,7 @@ export const Stat: React.FC<StatProps> = ({
           prefix={prefix}
           suffix={suffix}
           decimals={decimals}
+          compact={compact}
           formatter={formatter}
         />
       </div>

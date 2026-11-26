@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Scale,
@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Boxes,
   Lock,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   AquacultureState,
@@ -54,7 +55,7 @@ import {
   roundKg,
   roundTzs,
 } from '../../utils/sales';
-import { TRANSLATIONS } from '../../i18n/translations';
+import { tDomain, tr, TRANSLATIONS } from '../../i18n/translations';
 import { QuickActionType } from '../QuickActionModals';
 import {
   AnimatedTabs,
@@ -62,6 +63,8 @@ import {
   Button,
   Card,
   CountUpNumber,
+  DURATIONS,
+  EASE_OUT,
   EmptyState,
   FormError,
   INPUT_CLASS,
@@ -70,13 +73,18 @@ import {
   ValidCheck,
   listItem,
 } from '../../ui';
+import {
+  QuickSaleFlow,
+  QuickSaleSubmitPayload,
+  QuickSaleSubmitResult,
+} from './QuickSaleFlow';
 
-const PERIOD_OPTIONS: Array<{ id: TimeFilterPeriod; label: string }> = [
-  { id: 'day', label: 'Day' },
-  { id: 'week', label: 'Week' },
-  { id: 'month', label: 'Month' },
-  { id: 'year', label: 'Year' },
-  { id: 'all', label: 'All' },
+const PERIOD_OPTIONS: Array<{ id: TimeFilterPeriod; swLabel: string; enLabel: string }> = [
+  { id: 'day', swLabel: 'Siku', enLabel: 'Day' },
+  { id: 'week', swLabel: 'Wiki', enLabel: 'Week' },
+  { id: 'month', swLabel: 'Mwezi', enLabel: 'Month' },
+  { id: 'year', swLabel: 'Mwaka', enLabel: 'Year' },
+  { id: 'all', swLabel: 'Zote', enLabel: 'All' },
 ];
 
 const PAYMENT_METHODS: PaymentMethod[] = [
@@ -92,13 +100,30 @@ const PAYMENT_METHODS: PaymentMethod[] = [
 const TIERS: PriceTier[] = ['Wholesale', 'Hotel/HORECA', 'Retail', 'Standard'];
 const GRADES: FishGrade[] = ['Large', 'Medium', 'Small'];
 
+function renderGradeLabel(g: FishGrade, language: Language): string {
+  if (g === 'Large') return tr(language, 'Kubwa', 'Large');
+  if (g === 'Medium') return tr(language, 'Saizi ya Kati', 'Medium');
+  return tr(language, 'Ndogo', 'Small');
+}
+
 type SalesTab = 'sales' | 'customers' | 'price-list' | 'receivables' | 'lots' | 'pre-orders';
+type SalesWorkspaceMode = 'wizard' | 'operations';
 
 interface SalesModuleProps {
   state: AquacultureState;
   language: Language;
+  initialWizardLotId?: string;
+  initialWizardPondCode?: string;
+  initialWizardPreOrder?: PreOrder | null;
+  wizardTriggerKey?: number;
   onQuickAction: (a: QuickActionType) => void;
-  onOpenQuickSale: (opts?: { lotId?: string; preOrder?: PreOrder }) => void;
+  onOpenQuickSale: (opts?: { lotId?: string; pondCode?: string; preOrder?: PreOrder }) => void;
+  onQuickCreateCustomer: (payload: { name: string; phone: string }) => {
+    ok: boolean;
+    customer?: Customer;
+    error?: string;
+  };
+  onSubmitSale: (payload: QuickSaleSubmitPayload) => Promise<QuickSaleSubmitResult>;
   onBackToMenu?: () => void;
   onOpenFishStock?: () => void;
   onViewInvoice: (sale: Sale) => void;
@@ -119,8 +144,14 @@ interface SalesModuleProps {
 export const SalesModule: React.FC<SalesModuleProps> = ({
   state,
   language,
+  initialWizardLotId,
+  initialWizardPondCode,
+  initialWizardPreOrder,
+  wizardTriggerKey = 0,
   onQuickAction,
   onOpenQuickSale,
+  onQuickCreateCustomer,
+  onSubmitSale,
   onBackToMenu,
   onOpenFishStock,
   onViewInvoice,
@@ -135,7 +166,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
   const t = TRANSLATIONS[language];
   const perms = getPermissions(state.activeUser.role);
 
+  const [workspaceMode, setWorkspaceMode] = useState<SalesWorkspaceMode>('wizard');
   const [activeTab, setActiveTab] = useState<SalesTab>('sales');
+
+  useEffect(() => {
+    if (wizardTriggerKey > 0) {
+      setWorkspaceMode('wizard');
+    }
+  }, [wizardTriggerKey]);
   const [period, setPeriod] = useState<TimeFilterPeriod>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [speciesFilter, setSpeciesFilter] = useState<string>('all');
@@ -232,12 +270,24 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
     setPayError('');
     const amt = roundTzs(Number(payAmount));
     if (!Number.isFinite(amt) || amt <= 0) {
-      setPayError('Enter a payment amount greater than TZS 0.');
+      setPayError(
+        tr(
+          language,
+          'Weka kiasi cha malipo kikubwa kuliko TZS 0.',
+          'Enter a payment amount greater than TZS 0.'
+        )
+      );
       setPayShake((s) => s + 1);
       return;
     }
     if (amt > payTargetSale.balanceTzs) {
-      setPayError(`Amount cannot exceed invoice balance (${formatTzs(payTargetSale.balanceTzs)}).`);
+      setPayError(
+        tr(
+          language,
+          `Kiasi hakiwezi kuzidi baki ya ankara (${formatTzs(payTargetSale.balanceTzs)}).`,
+          `Amount cannot exceed invoice balance (${formatTzs(payTargetSale.balanceTzs)}).`
+        )
+      );
       setPayShake((s) => s + 1);
       return;
     }
@@ -248,7 +298,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
       reference: payRef.trim(),
     });
     if (!res.ok) {
-      setPayError(res.error || 'Failed to record payment.');
+      setPayError(res.error || tr(language, 'Imeshindwa kurekodi malipo.', 'Failed to record payment.'));
       setPayShake((s) => s + 1);
       return;
     }
@@ -258,12 +308,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
   const handleCreateCustomerSubmit = () => {
     setCustError('');
     if (!custName.trim()) {
-      setCustError('Customer name is required.');
+      setCustError(tr(language, 'Jina la mteja linahitajika.', 'Customer name is required.'));
       return;
     }
     const normalizedPhone = normalizeTzPhone(custPhone);
     if (!normalizedPhone) {
-      setCustError('Valid Tanzania phone number required (e.g. 0712345678 or 255712345678).');
+      setCustError(
+        tr(
+          language,
+          'Weka namba sahihi ya simu ya Tanzania (mf. 0712345678 au 255712345678).',
+          'Valid Tanzania phone number required (e.g. 0712345678 or 255712345678).'
+        )
+      );
       return;
     }
     const creditLimit = roundTzs(Number(custLimit) || 0);
@@ -279,7 +335,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
       notes: custNotes.trim(),
     });
     if (!res.ok) {
-      setCustError(res.error || 'Could not add customer.');
+      setCustError(res.error || tr(language, 'Imeshindwa kuongeza mteja.', 'Could not add customer.'));
       return;
     }
     setShowCustForm(false);
@@ -295,7 +351,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
     setPriceError('');
     const amt = roundTzs(Number(priceAmount));
     if (!Number.isFinite(amt) || amt <= 0) {
-      setPriceError('Enter a valid price per kg > 0.');
+      setPriceError(
+        tr(language, 'Weka bei sahihi kwa kg iliyo zaidi ya 0.', 'Enter a valid price per kg > 0.')
+      );
       return;
     }
     const existing = state.priceList.find(
@@ -315,21 +373,29 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
   const handleCreatePreOrderSubmit = () => {
     setPoError('');
     if (!poCustomerId) {
-      setPoError('Select a customer.');
+      setPoError(tr(language, 'Chagua mteja.', 'Select a customer.'));
       return;
     }
     const kg = roundKg(Number(poKg));
     if (!Number.isFinite(kg) || kg <= 0) {
-      setPoError('Requested kg must be > 0.');
+      setPoError(tr(language, 'Kilo zinazoombwa lazima zizidi 0.', 'Requested kg must be > 0.'));
       return;
     }
     if (!poExpectedDate) {
-      setPoError('Expected harvest/delivery date is required.');
+      setPoError(
+        tr(
+          language,
+          'Tarehe tarajiwa ya kuvuna/uwasilishaji inahitajika.',
+          'Expected harvest/delivery date is required.'
+        )
+      );
       return;
     }
     const price = roundTzs(Number(poPrice));
     if (!Number.isFinite(price) || price <= 0) {
-      setPoError('Agreed price/kg must be > 0.');
+      setPoError(
+        tr(language, 'Bei iliyokubaliwa kwa kg lazima izidi 0.', 'Agreed price/kg must be > 0.')
+      );
       return;
     }
     const deposit = Math.max(0, roundTzs(Number(poDeposit) || 0));
@@ -344,7 +410,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
       notes: poNotes.trim(),
     });
     if (!res.ok) {
-      setPoError(res.error || 'Failed to save pre-order.');
+      setPoError(res.error || tr(language, 'Imeshindwa kuhifadhi oda ya awali.', 'Failed to save pre-order.'));
       return;
     }
     setShowPreOrderForm(false);
@@ -356,82 +422,160 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <Card className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-start gap-3">
+    <div className="space-y-5">
+      {/* Header + Mode Switcher */}
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-3">
           {onBackToMenu && (
-            <Button variant="secondary" size="md" onClick={onBackToMenu}>
+            <Button variant="secondary" size="sm" onClick={onBackToMenu}>
               <ArrowLeft className="h-4 w-4" /> {t.ui.backToMenu}
             </Button>
           )}
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t.sales.title}</h2>
+            <h2 className="font-display text-lg font-extrabold text-slate-900 dark:text-white">
+              {t.sales.title}
+            </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">{t.sales.subtitle}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div
+            role="tablist"
+            aria-label={tr(language, 'Hali ya eneo la mavuno na mauzo', 'Harvest and sales workspace mode')}
+            className="inline-flex rounded-xl border border-slate-200 bg-slate-100/90 p-1 dark:border-slate-700 dark:bg-slate-800"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={workspaceMode === 'wizard'}
+              onClick={() => setWorkspaceMode('wizard')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                workspaceMode === 'wizard'
+                  ? 'bg-[#0B7189] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+              }`}
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              <span>{tr(language, 'Mchawi wa Mauzo Mapya', 'New Sale Wizard')}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={workspaceMode === 'operations'}
+              onClick={() => setWorkspaceMode('operations')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+                workspaceMode === 'operations'
+                  ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-900 dark:text-white'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>
+                {tr(language, `Mauzo na Rekodi (${state.sales.length})`, `Sales & Records (${state.sales.length})`)}
+              </span>
+            </button>
+          </div>
+
           {onOpenFishStock && (
-            <Button variant="secondary" size="md" onClick={onOpenFishStock}>
+            <Button variant="secondary" size="sm" onClick={onOpenFishStock}>
               <Boxes className="h-4 w-4 text-teal-600 dark:text-teal-400" /> {t.nav.fishStock}
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() =>
-              exportToCsv(
-                `dukaaqusmart-sales-${period}-${todayIso()}.csv`,
-                [
-                  'Invoice No',
-                  'Date',
-                  'Customer',
-                  'Phone',
-                  'Items',
-                  'Total kg',
-                  'Total (TZS)',
-                  'Paid (TZS)',
-                  'Balance (TZS)',
-                  'Payment Status',
-                  'Delivery Status',
-                ],
-                filteredSales.map((s) => [
-                  s.invoiceNo,
-                  s.date,
-                  s.customerName,
-                  s.customerPhone,
-                  s.lines.map((l) => `${l.species} ${l.grade} ${l.kg}kg`).join('; '),
-                  s.lines.reduce((sum, l) => sum + l.kg, 0).toFixed(2),
-                  s.totalTzs,
-                  s.paidTzs,
-                  s.balanceTzs,
-                  s.paymentStatus,
-                  s.deliveryStatus,
-                ])
-              )
-            }
-          >
-            <FileDown className="h-4 w-4 text-blue-600 dark:text-sky-400" /> {t.sales.exportCsvBtn}
-          </Button>
-          <Button
-            variant="warning"
-            size="md"
-            onClick={() => onQuickAction('harvest')}
-          >
+
+          {workspaceMode === 'operations' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                exportToCsv(
+                  `dukaaqusmart-sales-${period}-${todayIso()}.csv`,
+                  language === 'sw'
+                    ? [
+                        'Namba ya Ankara',
+                        'Tarehe',
+                        'Mteja',
+                        'Simu',
+                        'Bidhaa',
+                        'Jumla ya kg',
+                        'Jumla (TZS)',
+                        'Imelipwa (TZS)',
+                        'Baki (TZS)',
+                        'Hali ya Malipo',
+                        'Hali ya Usafirishaji',
+                      ]
+                    : [
+                        'Invoice No',
+                        'Date',
+                        'Customer',
+                        'Phone',
+                        'Items',
+                        'Total kg',
+                        'Total (TZS)',
+                        'Paid (TZS)',
+                        'Balance (TZS)',
+                        'Payment Status',
+                        'Delivery Status',
+                      ],
+                  filteredSales.map((s) => [
+                    s.invoiceNo,
+                    s.date,
+                    s.customerName,
+                    s.customerPhone,
+                    s.lines.map((l) => `${l.species} ${renderGradeLabel(l.grade, language)} ${l.kg}kg`).join('; '),
+                    s.lines.reduce((sum, l) => sum + l.kg, 0).toFixed(2),
+                    s.totalTzs,
+                    s.paidTzs,
+                    s.balanceTzs,
+                    tDomain(language, s.paymentStatus),
+                    tDomain(language, s.deliveryStatus),
+                  ])
+                )
+              }
+            >
+              <FileDown className="h-4 w-4 text-blue-600 dark:text-sky-400" /> {t.sales.exportCsvBtn}
+            </Button>
+          )}
+
+          <Button variant="warning" size="sm" onClick={() => onQuickAction('harvest')}>
             <Scale className="h-4 w-4" /> {t.sales.recordHarvestBtn}
-          </Button>
-          <Button
-            variant="success"
-            size="md"
-            onClick={() => onOpenQuickSale()}
-          >
-            <Plus className="h-4 w-4" /> {t.sales.quickSaleBtn}
           </Button>
         </div>
       </Card>
 
-      {/* 4 KPI Cards with CountUpNumber */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <AnimatePresence mode="wait">
+        {workspaceMode === 'wizard' ? (
+          <motion.div
+            key="sales-wizard-view"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
+          >
+            <QuickSaleFlow
+              open={true}
+              state={state}
+              language={language}
+              initialLotId={initialWizardLotId}
+              initialPondCode={initialWizardPondCode}
+              initialPreOrder={initialWizardPreOrder}
+              triggerKey={wizardTriggerKey}
+              onClose={() => setWorkspaceMode('operations')}
+              onQuickCreateCustomer={onQuickCreateCustomer}
+              onSubmitSale={onSubmitSale}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="sales-operations-view"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
+            className="space-y-5"
+          >
+            {/* 4 KPI Cards with CountUpNumber */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card hoverable>
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>{t.sales.kpiRevenue}</span>
@@ -441,7 +585,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             <CountUpNumber value={periodRevenue} formatter={formatTzs} />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-emerald-700 tabular-nums dark:text-emerald-400">
-            {filteredSales.length} invoice(s) in filter
+            {tr(
+              language,
+              `Ankara ${filteredSales.length} kwenye kichujio`,
+              `${filteredSales.length} invoice(s) in filter`
+            )}
           </div>
         </Card>
 
@@ -454,7 +602,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             <CountUpNumber value={periodKgSold} decimals={1} suffix=" kg" />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Across {state.harvestLots.filter((l) => getLotTotalRemainingKg(l) > 0).length} active lot(s) in stock
+            {tr(
+              language,
+              `Kwenye makundi ${state.harvestLots.filter((l) => getLotTotalRemainingKg(l) > 0).length} yenye akiba`,
+              `Across ${state.harvestLots.filter((l) => getLotTotalRemainingKg(l) > 0).length} active lot(s) in stock`
+            )}
           </div>
         </Card>
 
@@ -467,7 +619,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             <CountUpNumber value={avgPricePerKg} formatter={formatTzs} suffix="/kg" />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Tiered across {state.priceList.length} price rules
+            {tr(
+              language,
+              `Kulingana na kanuni ${state.priceList.length} za bei`,
+              `Tiered across ${state.priceList.length} price rules`
+            )}
           </div>
         </Card>
 
@@ -480,7 +636,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             <CountUpNumber value={totalReceivables} formatter={formatTzs} />
           </div>
           <div className="mt-0.5 text-[11px] font-semibold text-slate-500 tabular-nums dark:text-slate-400">
-            {unpaidSales.length} open invoice(s)
+            {tr(
+              language,
+              `Ankara ${unpaidSales.length} zinazodaiwa`,
+              `${unpaidSales.length} open invoice(s)`
+            )}
           </div>
         </Card>
       </div>
@@ -542,13 +702,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 size="sm"
                 activeId={period}
                 onChange={setPeriod}
-                tabs={PERIOD_OPTIONS}
+                tabs={PERIOD_OPTIONS.map((p) => ({
+                  id: p.id,
+                  label: language === 'sw' ? p.swLabel : p.enLabel,
+                }))}
               />
 
               <div className="flex flex-wrap items-center gap-2">
                 {lastRefreshedLabel && (
                   <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                    Synced {lastRefreshedLabel}
+                    {tr(language, 'Imesasishwa', 'Synced')} {lastRefreshedLabel}
                   </span>
                 )}
                 <div className="relative min-w-[220px] flex-1 sm:flex-initial">
@@ -557,18 +720,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Invoice #, customer, pond..."
-                    aria-label="Search sales"
+                    placeholder={tr(language, 'Namba ya ankara, mteja, bwawa...', 'Invoice #, customer, pond...')}
+                    aria-label={tr(language, 'Tafuta mauzo', 'Search sales')}
                     className={`${INPUT_CLASS} min-h-[42px] py-2 pl-9`}
                   />
                 </div>
                 <select
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
-                  aria-label="Filter by customer"
+                  aria-label={tr(language, 'Chuja kwa mteja', 'Filter by customer')}
                   className={`${INPUT_CLASS} min-h-[42px] w-auto min-w-[165px] py-2 font-medium`}
                 >
-                  <option value="all">All Customers</option>
+                  <option value="all">{tr(language, 'Wateja Wote', 'All Customers')}</option>
                   {state.customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -578,10 +741,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 <select
                   value={speciesFilter}
                   onChange={(e) => setSpeciesFilter(e.target.value)}
-                  aria-label="Filter by species"
+                  aria-label={tr(language, 'Chuja kwa aina ya samaki', 'Filter by species')}
                   className={`${INPUT_CLASS} min-h-[42px] w-auto min-w-[150px] py-2 font-medium`}
                 >
-                  <option value="all">All Species</option>
+                  <option value="all">{tr(language, 'Aina Zote', 'All Species')}</option>
                   {state.speciesCatalogue.map((s) => (
                     <option key={s.id} value={s.commonName}>
                       {s.commonName}
@@ -591,24 +754,28 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 <select
                   value={paymentFilter}
                   onChange={(e) => setPaymentFilter(e.target.value as 'all' | 'Paid' | 'Partial' | 'Credit')}
-                  aria-label="Filter by payment status"
+                  aria-label={tr(language, 'Chuja kwa hali ya malipo', 'Filter by payment status')}
                   className={`${INPUT_CLASS} min-h-[42px] w-auto min-w-[140px] py-2 font-medium`}
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="Paid">Paid</option>
-                  <option value="Partial">Partial</option>
-                  <option value="Credit">Credit</option>
+                  <option value="all">{tr(language, 'Hali Zote', 'All Statuses')}</option>
+                  <option value="Paid">{tDomain(language, 'Paid')}</option>
+                  <option value="Partial">{tDomain(language, 'Partial')}</option>
+                  <option value="Credit">{tDomain(language, 'Credit')}</option>
                 </select>
               </div>
             </Card>
 
             {filteredSales.length === 0 ? (
               <EmptyState
-                title="No sales match the selected filters"
-                description="Adjust your filters or start a 30-second Quick Sale."
+                title={tr(language, 'Hakuna mauzo yanayolingana na vichujio', 'No sales match the selected filters')}
+                description={tr(
+                  language,
+                  'Rekebisha vichujio vyako au anza Uuzaji wa Haraka wa sekunde 30.',
+                  'Adjust your filters or start a 30-second Quick Sale.'
+                )}
                 action={
                   <Button variant="success" onClick={() => onOpenQuickSale()}>
-                    <Plus className="h-4 w-4" /> Create First Sale
+                    <Plus className="h-4 w-4" /> {tr(language, 'Unda Mauzo ya Kwanza', 'Create First Sale')}
                   </Button>
                 }
               />
@@ -647,12 +814,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                                         : 'danger'
                                   }
                                 >
-                                  {sale.paymentStatus}
+                                  {tDomain(language, sale.paymentStatus)}
                                 </Badge>
                               </div>
                               <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                                 {sale.date} · {formatTzPhoneDisplay(sale.customerPhone)} · {saleKg.toFixed(2)} kg ·{' '}
-                                {sale.lines.length} line(s) · Driver: {sale.vehicleOrDriver}
+                                {sale.lines.length} {tr(language, 'mstari', 'line(s)')} ·{' '}
+                                {tr(language, 'Dereva', 'Driver')}: {sale.vehicleOrDriver}
                               </div>
                             </div>
 
@@ -663,31 +831,36 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                                 </div>
                                 <div className="text-[11px] font-semibold tabular-nums">
                                   <span className="text-emerald-700 dark:text-emerald-400">
-                                    Paid: {formatTzs(sale.paidTzs)}
+                                    {tr(language, 'Imelipwa', 'Paid')}: {formatTzs(sale.paidTzs)}
                                   </span>
                                   {sale.balanceTzs > 0 && (
                                     <span className="ml-2 text-rose-700 dark:text-rose-400">
-                                      Due: {formatTzs(sale.balanceTzs)}
+                                      {tr(language, 'Deni', 'Due')}: {formatTzs(sale.balanceTzs)}
                                     </span>
                                   )}
                                 </div>
                               </div>
 
                               <select
-                                aria-label={`Delivery status for ${sale.invoiceNo}`}
+                                aria-label={tr(
+                                  language,
+                                  `Hali ya usafirishaji ya ${sale.invoiceNo}`,
+                                  `Delivery status for ${sale.invoiceNo}`
+                                )}
                                 value={sale.deliveryStatus}
                                 onChange={(e) =>
                                   onUpdateDeliveryStatus(sale.id, e.target.value as Sale['deliveryStatus'])
                                 }
                                 className={`${INPUT_CLASS} min-h-[40px] w-auto min-w-[155px] py-1.5 text-xs font-semibold`}
                               >
-                                <option value="Pending Dispatch">Pending Dispatch</option>
-                                <option value="In Transit">In Transit</option>
-                                <option value="Delivered">Delivered</option>
+                                <option value="Pending Dispatch">{tDomain(language, 'Pending Dispatch')}</option>
+                                <option value="In Transit">{tDomain(language, 'In Transit')}</option>
+                                <option value="Delivered">{tDomain(language, 'Delivered')}</option>
                               </select>
 
                               <Button variant="secondary" size="sm" onClick={() => onViewInvoice(sale)}>
-                                <FileText className="h-3.5 w-3.5 text-blue-600 dark:text-sky-400" /> Invoice / Print
+                                <FileText className="h-3.5 w-3.5 text-blue-600 dark:text-sky-400" />{' '}
+                                {tr(language, 'Ankara / Chapisha', 'Invoice / Print')}
                               </Button>
 
                               {sale.balanceTzs > 0 && (
@@ -706,7 +879,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                                   className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                                 >
                                   <strong>
-                                    {l.species} ({l.grade})
+                                    {l.species} ({renderGradeLabel(l.grade, language)})
                                   </strong>{' '}
                                   {l.kg} kg × {formatTzs(l.pricePerKgTzs)} ({l.pondCode})
                                 </span>
@@ -714,7 +887,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                             </div>
                             {salePayments.length > 0 && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                                Payments: {salePayments.map((p) => `${p.method} (${formatTzs(p.amountTzs)})`).join(', ')}
+                                {tr(language, 'Malipo', 'Payments')}:{' '}
+                                {salePayments
+                                  .map((p) => `${tDomain(language, p.method)} (${formatTzs(p.amountTzs)})`)
+                                  .join(', ')}
                               </div>
                             )}
                           </div>
@@ -735,20 +911,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           <Card className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Customer Directory & Credit Limits
+                {tr(language, 'Orodha ya Wateja na Vikomo vya Mkopo', 'Customer Directory & Credit Limits')}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Manage buyer price tiers, credit limits (TZS), payment terms, and live receivables.
+                {tr(
+                  language,
+                  'Simamia madaraja ya bei za wateja, vikomo vya mkopo (TZS), masharti ya malipo, na madeni halisi.',
+                  'Manage buyer price tiers, credit limits (TZS), payment terms, and live receivables.'
+                )}
               </p>
             </div>
             <Button variant="primary" size="sm" onClick={() => setShowCustForm(!showCustForm)}>
-              <Plus className="h-4 w-4" /> Add Customer
+              <Plus className="h-4 w-4" /> {t.sales.newCustomer}
             </Button>
           </Card>
 
           {showCustForm && (
             <Card className="space-y-3 border-blue-200 dark:border-sky-800/60">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Register New Customer</h4>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                {tr(language, 'Sajili Mteja Mpya', 'Register New Customer')}
+              </h4>
               <FormError message={custError} />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
@@ -756,7 +938,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="cust-name"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Name *
+                    {tr(language, 'Jina *', 'Name *')}
                   </label>
                   <input
                     id="cust-name"
@@ -771,7 +953,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="cust-phone"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Phone (255XXXXXXXXX or 07...) *
+                    {tr(language, 'Simu (255XXXXXXXXX au 07...) *', 'Phone (255XXXXXXXXX or 07...) *')}
                   </label>
                   <input
                     id="cust-phone"
@@ -787,7 +969,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="cust-type"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Customer Type
+                    {tr(language, 'Aina ya Mteja', 'Customer Type')}
                   </label>
                   <select
                     id="cust-type"
@@ -795,11 +977,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     onChange={(e) => setCustType(e.target.value as CustomerType)}
                     className={`${INPUT_CLASS} min-h-[42px]`}
                   >
-                    <option value="Market">Market</option>
-                    <option value="Hotel/Restaurant">Hotel/Restaurant</option>
-                    <option value="Retailer">Retailer</option>
-                    <option value="Wholesaler">Wholesaler</option>
-                    <option value="Individual">Individual</option>
+                    <option value="Market">{tDomain(language, 'Market')}</option>
+                    <option value="Hotel/Restaurant">{tDomain(language, 'Hotel/Restaurant')}</option>
+                    <option value="Retailer">{tDomain(language, 'Retailer')}</option>
+                    <option value="Wholesaler">{tDomain(language, 'Wholesaler')}</option>
+                    <option value="Individual">{tDomain(language, 'Individual')}</option>
                   </select>
                 </div>
                 <div>
@@ -807,7 +989,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="cust-loc"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Location / Delivery Area
+                    {tr(language, 'Mahali / Eneo la Uwasilishaji', 'Location / Delivery Area')}
                   </label>
                   <input
                     id="cust-loc"
@@ -822,7 +1004,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="cust-tier"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Price Tier
+                    {tr(language, 'Daraja la Bei', 'Price Tier')}
                   </label>
                   <select
                     id="cust-tier"
@@ -830,9 +1012,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     onChange={(e) => setCustTier(e.target.value as PriceTier)}
                     className={`${INPUT_CLASS} min-h-[42px]`}
                   >
-                    {TIERS.map((tr) => (
-                      <option key={tr} value={tr}>
-                        {tr}
+                    {TIERS.map((tier) => (
+                      <option key={tier} value={tier}>
+                        {tDomain(language, tier)}
                       </option>
                     ))}
                   </select>
@@ -843,7 +1025,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="cust-limit"
                       className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                     >
-                      Credit Limit (TZS)
+                      {tr(language, 'Kikomo cha Mkopo (TZS)', 'Credit Limit (TZS)')}
                     </label>
                     <input
                       id="cust-limit"
@@ -859,7 +1041,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="cust-terms"
                       className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                     >
-                      Terms (Days)
+                      {tr(language, 'Muda (Siku)', 'Terms (Days)')}
                     </label>
                     <input
                       id="cust-terms"
@@ -877,7 +1059,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   htmlFor="cust-notes"
                   className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  Notes
+                  {tr(language, 'Maelezo', 'Notes')}
                 </label>
                 <input
                   id="cust-notes"
@@ -889,10 +1071,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setShowCustForm(false)}>
-                  Cancel
+                  {tr(language, 'Ghairi', 'Cancel')}
                 </Button>
                 <Button variant="success" size="sm" onClick={handleCreateCustomerSubmit}>
-                  Save Customer
+                  {tr(language, 'Hifadhi Mteja', 'Save Customer')}
                 </Button>
               </div>
             </Card>
@@ -919,39 +1101,47 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                           {formatTzPhoneDisplay(c.phone)} · {c.location}
                         </div>
                       </div>
-                      <Badge variant="info">{c.type}</Badge>
+                      <Badge variant="info">{tDomain(language, c.type)}</Badge>
                     </div>
 
                     <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
                       <div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">Price Tier</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {tr(language, 'Daraja la Bei', 'Price Tier')}
+                        </div>
                         {perms.canManageCustomers ? (
                           <select
-                            aria-label={`Price tier for ${c.name}`}
+                            aria-label={tr(language, `Daraja la bei la ${c.name}`, `Price tier for ${c.name}`)}
                             value={c.priceTier}
                             onChange={(e) =>
                               onUpdateCustomer(c.id, { priceTier: e.target.value as PriceTier })
                             }
                             className="mt-1 min-h-[36px] w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                           >
-                            {TIERS.map((tr) => (
-                              <option key={tr} value={tr}>
-                                {tr}
+                            {TIERS.map((tier) => (
+                              <option key={tier} value={tier}>
+                                {tDomain(language, tier)}
                               </option>
                             ))}
                           </select>
                         ) : (
-                          <div className="font-bold text-slate-800 dark:text-slate-200">{c.priceTier}</div>
+                          <div className="font-bold text-slate-800 dark:text-slate-200">
+                            {tDomain(language, c.priceTier)}
+                          </div>
                         )}
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">Credit Limit</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {tr(language, 'Kikomo cha Mkopo', 'Credit Limit')}
+                        </div>
                         <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                           {formatTzs(c.creditLimitTzs)}
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">Outstanding</div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {tr(language, 'Deni Lililopo', 'Outstanding')}
+                        </div>
                         <div
                           className={`font-extrabold tabular-nums ${
                             debt > 0
@@ -977,14 +1167,18 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       </div>
                       <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                         <span>
-                          Terms: {c.paymentTermsDays} days · Credit used {pct}%
+                          {tr(
+                            language,
+                            `Muda: siku ${c.paymentTermsDays} · Mkopo uliotumika ${pct}%`,
+                            `Terms: ${c.paymentTermsDays} days · Credit used ${pct}%`
+                          )}
                         </span>
                         <button
                           type="button"
                           onClick={() => onOpenQuickSale()}
                           className="font-bold text-blue-600 hover:underline dark:text-sky-400"
                         >
-                          New Sale →
+                          {tr(language, 'Mauzo Mapya →', 'New Sale →')}
                         </button>
                       </div>
                     </div>
@@ -1003,15 +1197,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Species × Grade × Tier Price List (TZS/kg)
+                  {tr(language, 'Orodha ya Bei: Aina × Daraja la Ukubwa × Daraja la Mteja (TZS/kg)', 'Species × Grade × Tier Price List (TZS/kg)')}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Prices auto-fill in Quick Sale based on customer tier. Only Owner / Farm Manager can modify prices.
+                  {tr(
+                    language,
+                    'Bei hujijaza kiotomatiki kwenye Uza Haraka kulingana na daraja la mteja. Mmiliki / Meneja wa Shamba pekee anaweza kubadilisha bei.',
+                    'Prices auto-fill in Quick Sale based on customer tier. Only Owner / Farm Manager can modify prices.'
+                  )}
                 </p>
               </div>
               {!perms.canOverrideSalePrice && (
                 <Badge variant="neutral">
-                  <Lock className="h-3.5 w-3.5" /> View Only ({state.activeUser.roleLabel})
+                  <Lock className="h-3.5 w-3.5" /> {tr(language, 'Kusoma Pekee', 'View Only')} ({tDomain(language, state.activeUser.roleLabel)})
                 </Badge>
               )}
             </div>
@@ -1025,7 +1223,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="pl-species"
                       className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
                     >
-                      Species
+                      {tr(language, 'Aina ya Samaki', 'Species')}
                     </label>
                     <select
                       id="pl-species"
@@ -1045,7 +1243,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="pl-grade"
                       className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
                     >
-                      Grade
+                      {tr(language, 'Daraja (Ukubwa)', 'Grade')}
                     </label>
                     <select
                       id="pl-grade"
@@ -1055,7 +1253,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     >
                       {GRADES.map((g) => (
                         <option key={g} value={g}>
-                          {g}
+                          {renderGradeLabel(g, language)}
                         </option>
                       ))}
                     </select>
@@ -1065,7 +1263,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="pl-tier"
                       className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
                     >
-                      Tier
+                      {tr(language, 'Daraja la Bei', 'Tier')}
                     </label>
                     <select
                       id="pl-tier"
@@ -1073,9 +1271,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       onChange={(e) => setPriceTier(e.target.value as PriceTier)}
                       className={`${INPUT_CLASS} min-h-[42px]`}
                     >
-                      {TIERS.map((tr) => (
-                        <option key={tr} value={tr}>
-                          {tr}
+                      {TIERS.map((tier) => (
+                        <option key={tier} value={tier}>
+                          {tDomain(language, tier)}
                         </option>
                       ))}
                     </select>
@@ -1085,7 +1283,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="pl-price"
                       className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300"
                     >
-                      Price/kg (TZS)
+                      {tr(language, 'Bei/kg (TZS)', 'Price/kg (TZS)')}
                     </label>
                     <input
                       id="pl-price"
@@ -1098,7 +1296,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   </div>
                   <div className="flex items-end">
                     <Button variant="primary" size="md" fullWidth onClick={handleAddPriceSubmit}>
-                      Set / Update Price
+                      {tr(language, 'Weka / Sasisha Bei', 'Set / Update Price')}
                     </Button>
                   </div>
                 </div>
@@ -1109,11 +1307,11 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                    <th className="py-2">Species</th>
-                    <th className="py-2">Grade</th>
-                    {TIERS.map((tr) => (
-                      <th key={tr} className="py-2 text-right">
-                        {tr}
+                    <th className="py-2">{tr(language, 'Aina', 'Species')}</th>
+                    <th className="py-2">{tr(language, 'Daraja', 'Grade')}</th>
+                    {TIERS.map((tier) => (
+                      <th key={tier} className="py-2 text-right">
+                        {tDomain(language, tier)}
                       </th>
                     ))}
                   </tr>
@@ -1125,14 +1323,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                         <td className="py-2.5 font-bold text-slate-900 dark:text-white">
                           {sp.commonName}
                         </td>
-                        <td className="py-2.5 font-semibold text-blue-700 dark:text-sky-400">{g}</td>
-                        {TIERS.map((tr) => {
+                        <td className="py-2.5 font-semibold text-blue-700 dark:text-sky-400">
+                          {renderGradeLabel(g, language)}
+                        </td>
+                        {TIERS.map((tier) => {
                           const item = state.priceList.find(
-                            (p) => p.species === sp.commonName && p.grade === g && p.tier === tr
+                            (p) => p.species === sp.commonName && p.grade === g && p.tier === tier
                           );
                           return (
                             <td
-                              key={tr}
+                              key={tier}
                               className="py-2.5 text-right font-mono font-bold text-slate-900 tabular-nums dark:text-white"
                             >
                               {item ? formatTzs(item.pricePerKgTzs) : '—'}
@@ -1155,7 +1355,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Card className="border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/35">
               <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                0–7 Days Aging
+                {tr(language, 'Umri wa Siku 0–7', '0–7 Days Aging')}
               </div>
               <div className="mt-1 text-lg font-extrabold text-emerald-900 tabular-nums dark:text-emerald-200">
                 <CountUpNumber value={aging0_7} formatter={(v) => formatTzs(v)} />
@@ -1163,7 +1363,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             </Card>
             <Card className="border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/35">
               <div className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-                8–30 Days Aging
+                {tr(language, 'Umri wa Siku 8–30', '8–30 Days Aging')}
               </div>
               <div className="mt-1 text-lg font-extrabold text-amber-900 tabular-nums dark:text-amber-200">
                 <CountUpNumber value={aging8_30} formatter={(v) => formatTzs(v)} />
@@ -1171,7 +1371,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             </Card>
             <Card className="border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/35">
               <div className="text-xs font-semibold text-rose-800 dark:text-rose-300">
-                30+ Days Overdue
+                {tr(language, 'Zaidi ya Siku 30 (Yamechelewa)', '30+ Days Overdue')}
               </div>
               <div className="mt-1 text-lg font-extrabold text-rose-900 tabular-nums dark:text-rose-200">
                 <CountUpNumber value={aging30Plus} formatter={(v) => formatTzs(v)} />
@@ -1182,8 +1382,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           {unpaidSales.length === 0 ? (
             <EmptyState
               icon={<CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />}
-              title="All customer invoices are paid in full"
-              description="No outstanding customer credit balances right now."
+              title={tr(language, 'Ankara zote za wateja zimelipwa kikamilifu', 'All customer invoices are paid in full')}
+              description={tr(language, 'Hakuna salio la mkopo linalodaiwa kutoka kwa wateja kwa sasa.', 'No outstanding customer credit balances right now.')}
             />
           ) : (
             <Card padded={false} className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1193,7 +1393,9 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 const farmName = state.farms[0]?.name || 'DukaAquSmart Farm';
                 const waRemind = buildWhatsAppReminderUrl(sale, farmName, language);
                 const smsRemind = `sms:+${sale.customerPhone}?body=${encodeURIComponent(
-                  `Reminder: Invoice ${sale.invoiceNo} (${sale.date}) balance ${formatTzs(sale.balanceTzs)} due to ${farmName}.`
+                  language === 'sw'
+                    ? `Kikumbusho: Ankara ${sale.invoiceNo} (${sale.date}) ina salio la ${formatTzs(sale.balanceTzs)} kwenda ${farmName}.`
+                    : `Reminder: Invoice ${sale.invoiceNo} (${sale.date}) balance ${formatTzs(sale.balanceTzs)} due to ${farmName}.`
                 )}`;
                 return (
                   <div
@@ -1214,18 +1416,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                           }
                           pulseDot={bucket === '30+'}
                         >
-                          {days}d ({bucket} days)
+                          {tr(language, `Siku ${days} (${bucket})`, `${days}d (${bucket} days)`)}
                         </Badge>
                       </div>
                       <div className="mt-0.5 text-slate-500 dark:text-slate-400">
-                        Invoice Date: {sale.date} · Total: {formatTzs(sale.totalTzs)} · Paid:{' '}
-                        {formatTzs(sale.paidTzs)}
+                        {tr(language, 'Tarehe ya Ankara', 'Invoice Date')}: {sale.date} ·{' '}
+                        {tr(language, 'Jumla', 'Total')}: {formatTzs(sale.totalTzs)} ·{' '}
+                        {tr(language, 'Imelipwa', 'Paid')}: {formatTzs(sale.paidTzs)}
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="mr-2 text-sm font-extrabold text-rose-700 tabular-nums dark:text-rose-400">
-                        Due: {formatTzs(sale.balanceTzs)}
+                        {tr(language, 'Deni', 'Due')}: {formatTzs(sale.balanceTzs)}
                       </span>
                       <a
                         href={waRemind}
@@ -1259,8 +1462,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           {state.harvestLots.length === 0 ? (
             <EmptyState
               icon={<Package className="h-6 w-6" />}
-              title="No harvest lots recorded yet"
-              description="Record a pond harvest to grade fish into sellable chilled lots."
+              title={tr(language, 'Hakuna mafungu ya mavuno yaliyorekodiwa bado', 'No harvest lots recorded yet')}
+              description={tr(
+                language,
+                'Rekodi mavuno ya bwawa ili kupanga samaki katika mafungu ya baridi tayari kwa mauzo.',
+                'Record a pond harvest to grade fish into sellable chilled lots.'
+              )}
             />
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1289,29 +1496,39 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Harvested {lot.date} · Batch {lot.batchCode} · Approved by {lot.approvedBy}
+                            {tr(language, 'Ilivunwa', 'Harvested')} {lot.date} ·{' '}
+                            {tr(language, 'Kundi', 'Batch')} {lot.batchCode} ·{' '}
+                            {tr(language, 'Imeidhinishwa na', 'Approved by')} {lot.approvedBy}
                           </div>
                         </div>
                         <Badge variant={remTotal > 0 ? 'success' : 'neutral'}>
-                          {remTotal > 0 ? `${remTotal.toFixed(1)} kg in stock` : 'Sold Out'}
+                          {remTotal > 0
+                            ? `${remTotal.toFixed(1)} kg ${tr(language, 'bohari', 'in stock')}`
+                            : tr(language, 'Imeisha', 'Sold Out')}
                         </Badge>
                       </div>
 
                       <div className="mt-3 grid grid-cols-3 gap-2">
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Large</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Large', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.large.toFixed(1)} / {lot.grades.largeKg} kg
                           </div>
                         </div>
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Medium</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Medium', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.medium.toFixed(1)} / {lot.grades.mediumKg} kg
                           </div>
                         </div>
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Small</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Small', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.small.toFixed(1)} / {lot.grades.smallKg} kg
                           </div>
@@ -1320,7 +1537,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
 
                       <div className="mt-3 flex items-center justify-between">
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Total harvested: {origTotal.toFixed(1)} kg (Damaged: {lot.grades.damagedKg} kg)
+                          {tr(language, 'Jumla iliyovunwa', 'Total harvested')}: {origTotal.toFixed(1)} kg (
+                          {tr(language, 'Waliokwama/Kuharibika', 'Damaged')}: {lot.grades.damagedKg} kg)
                         </span>
                         {remTotal > 0 && (
                           <Button
@@ -1328,7 +1546,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                             size="sm"
                             onClick={() => onOpenQuickSale({ lotId: lot.id })}
                           >
-                            Sell from Lot <ArrowRight className="h-3.5 w-3.5" />
+                            {tr(language, 'Uza Kutoka Fungu', 'Sell from Lot')} <ArrowRight className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </div>
@@ -1347,21 +1565,25 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           <Card className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Customer Pre-Orders & Harvest Bookings
+                {tr(language, 'Oda za Awali na Uhifadhi wa Mavuno', 'Customer Pre-Orders & Harvest Bookings')}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Reserve upcoming harvest tonnage for key customers and convert to a Sale in one tap.
+                {tr(
+                  language,
+                  'Hifadhi tani zijazo za mavuno kwa wateja muhimu na ubadilishe kuwa Mauzo kwa kubofya mara moja.',
+                  'Reserve upcoming harvest tonnage for key customers and convert to a Sale in one tap.'
+                )}
               </p>
             </div>
             <Button variant="primary" size="sm" onClick={() => setShowPreOrderForm(!showPreOrderForm)}>
-              <Plus className="h-4 w-4" /> New Pre-Order
+              <Plus className="h-4 w-4" /> {tr(language, 'Oda Mpya ya Awali', 'New Pre-Order')}
             </Button>
           </Card>
 
           {showPreOrderForm && (
             <Card className="space-y-3 border-blue-200 dark:border-sky-800/60">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                Book Upcoming Fish Pre-Order
+                {tr(language, 'Weka Oda ya Awali ya Samaki', 'Book Upcoming Fish Pre-Order')}
               </h4>
               <FormError message={poError} />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -1370,7 +1592,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="po-cust"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Customer *
+                    {tr(language, 'Mteja *', 'Customer *')}
                   </label>
                   <select
                     id="po-cust"
@@ -1391,10 +1613,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     }}
                     className={`${INPUT_CLASS} min-h-[42px]`}
                   >
-                    <option value="">Select customer...</option>
+                    <option value="">{tr(language, 'Chagua mteja...', 'Select customer...')}</option>
                     {state.customers.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c.priceTier})
+                        {c.name} ({tDomain(language, c.priceTier)})
                       </option>
                     ))}
                   </select>
@@ -1404,7 +1626,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="po-species"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Species *
+                    {tr(language, 'Aina ya Samaki *', 'Species *')}
                   </label>
                   <select
                     id="po-species"
@@ -1424,7 +1646,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="po-grade"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Grade *
+                    {tr(language, 'Daraja *', 'Grade *')}
                   </label>
                   <select
                     id="po-grade"
@@ -1434,7 +1656,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   >
                     {GRADES.map((g) => (
                       <option key={g} value={g}>
-                        {g}
+                        {renderGradeLabel(g, language)}
                       </option>
                     ))}
                   </select>
@@ -1444,7 +1666,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="po-kg"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Requested Weight (kg) *
+                    {tr(language, 'Uzito Unaoombwa (kg) *', 'Requested Weight (kg) *')}
                   </label>
                   <input
                     id="po-kg"
@@ -1460,7 +1682,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                     htmlFor="po-date"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Expected Date *
+                    {tr(language, 'Tarehe Inayotarajiwa *', 'Expected Date *')}
                   </label>
                   <input
                     id="po-date"
@@ -1476,7 +1698,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="po-price"
                       className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                     >
-                      Agreed Price/kg *
+                      {tr(language, 'Bei Iliyokubaliwa/kg *', 'Agreed Price/kg *')}
                     </label>
                     <input
                       id="po-price"
@@ -1492,7 +1714,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                       htmlFor="po-dep"
                       className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                     >
-                      Deposit (TZS)
+                      {tr(language, 'Malipo ya Awali (TZS)', 'Deposit (TZS)')}
                     </label>
                     <input
                       id="po-dep"
@@ -1510,7 +1732,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   htmlFor="po-notes"
                   className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  Notes
+                  {tr(language, 'Maelezo', 'Notes')}
                 </label>
                 <input
                   id="po-notes"
@@ -1522,10 +1744,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setShowPreOrderForm(false)}>
-                  Cancel
+                  {tr(language, 'Ghairi', 'Cancel')}
                 </Button>
                 <Button variant="success" size="sm" onClick={handleCreatePreOrderSubmit}>
-                  Save Pre-Order
+                  {tr(language, 'Hifadhi Oda ya Awali', 'Save Pre-Order')}
                 </Button>
               </div>
             </Card>
@@ -1542,7 +1764,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-900 dark:text-white">
-                        {cust?.name || 'Customer'}
+                        {cust?.name || tr(language, 'Mteja', 'Customer')}
                       </span>
                       <Badge
                         variant={
@@ -1553,15 +1775,15 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                               : 'neutral'
                         }
                       >
-                        {po.status}
+                        {tDomain(language, po.status)}
                       </Badge>
                     </div>
                     <div className="mt-0.5 text-slate-600 dark:text-slate-300">
                       <strong>
-                        {po.requestedKg} kg {po.species} ({po.grade})
+                        {po.requestedKg} kg {po.species} ({renderGradeLabel(po.grade, language)})
                       </strong>{' '}
-                      @ {formatTzs(po.agreedPricePerKgTzs)}/kg · Expected {po.expectedDate} · Deposit:{' '}
-                      {formatTzs(po.depositTzs)}
+                      @ {formatTzs(po.agreedPricePerKgTzs)}/kg · {tr(language, 'Inatarajiwa', 'Expected')} {po.expectedDate} ·{' '}
+                      {tr(language, 'Amana', 'Deposit')}: {formatTzs(po.depositTzs)}
                     </div>
                     {po.notes && (
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">{po.notes}</div>
@@ -1570,7 +1792,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                   {po.status === 'Open' && (
                     <div className="flex items-center gap-2">
                       <Button variant="secondary" size="sm" onClick={() => onCancelPreOrder(po.id)}>
-                        Cancel
+                        {tr(language, 'Ghairi', 'Cancel')}
                       </Button>
                       <Button
                         variant="success"
@@ -1587,16 +1809,23 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
           </Card>
         </div>
       )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* COLLECT PAYMENT SHEET */}
       <Sheet
         open={Boolean(payTargetSale)}
         onClose={() => setPayTargetSale(null)}
         maxWidthClass="sm:max-w-md"
-        title={payTargetSale ? `Collect Payment — ${payTargetSale.invoiceNo}` : 'Collect Payment'}
+        title={
+          payTargetSale
+            ? `${t.sales.collectPayment} — ${payTargetSale.invoiceNo}`
+            : t.sales.collectPayment
+        }
         subtitle={
           payTargetSale
-            ? `${payTargetSale.customerName} · Due: ${formatTzs(payTargetSale.balanceTzs)}`
+            ? `${payTargetSale.customerName} · ${tr(language, 'Deni', 'Due')}: ${formatTzs(payTargetSale.balanceTzs)}`
             : undefined
         }
       >
@@ -1609,7 +1838,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 htmlFor="cp-amount"
                 className="mb-1 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300"
               >
-                <span>Amount Received (TZS) *</span>
+                <span>{tr(language, 'Kiasi Kilichopokelewa (TZS) *', 'Amount Received (TZS) *')}</span>
                 <ValidCheck
                   valid={Number(payAmount) > 0 && Number(payAmount) <= payTargetSale.balanceTzs}
                 />
@@ -1628,7 +1857,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
 
             <div>
               <div className="mb-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                Payment Method *
+                {tr(language, 'Njia ya Malipo *', 'Payment Method *')}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {PAYMENT_METHODS.map((m) => (
@@ -1642,7 +1871,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                         : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
                     }`}
                   >
-                    {m}
+                    {tDomain(language, m)}
                   </button>
                 ))}
               </div>
@@ -1653,7 +1882,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 htmlFor="cp-ref"
                 className="mb-1 block text-xs font-bold text-slate-700 dark:text-slate-300"
               >
-                Transaction Reference / Receipt #
+                {tr(language, 'Kumbukumbu ya Muamala / Risiti #', 'Transaction Reference / Receipt #')}
               </label>
               <input
                 id="cp-ref"
@@ -1665,7 +1894,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             </div>
 
             <Button variant="success" size="lg" fullWidth onClick={handleCollectSubmit}>
-              <CheckCircle2 className="h-4 w-4" /> Record Payment
+              <CheckCircle2 className="h-4 w-4" /> {tr(language, 'Rekodi Malipo', 'Record Payment')}
             </Button>
           </div>
         )}

@@ -11,6 +11,7 @@ import {
   Farm,
   FarmInfrastructureMarker,
   GeoJsonPolygon,
+  Language,
   MappingMethod,
   Pond,
 } from '../types/aquaculture';
@@ -90,7 +91,9 @@ export function measureAndValidatePolygon(opts: {
   farmGps?: [number, number];
   maxRadiusM?: number;
   gpsAccuracyM?: number;
+  language?: Language;
 }): GeometryMeasurementResult {
+  const lang = opts.language ?? 'sw';
   const warnings: string[] = [];
   const cleanLatLng = stripClosingDuplicate(opts.polygonLatLng).map(
     ([lat, lng]) => [Number(lat.toFixed(7)), Number(lng.toFixed(7))] as [number, number]
@@ -99,7 +102,10 @@ export function measureAndValidatePolygon(opts: {
   if (cleanLatLng.length < 3) {
     return {
       valid: false,
-      error: 'Draw or record at least 3 boundary corners to form a closed pond polygon.',
+      error:
+        lang === 'sw'
+          ? 'Chora au rekodi angalau pembe 3 za mpaka ili kuunda umbo lililofungwa la bwawa.'
+          : 'Draw or record at least 3 boundary corners to form a closed pond polygon.',
       areaSqm: 0,
       waterSurfaceSqm: 0,
       perimeterM: 0,
@@ -115,7 +121,10 @@ export function measureAndValidatePolygon(opts: {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return {
         valid: false,
-        error: 'Polygon contains invalid WGS84 coordinates.',
+        error:
+          lang === 'sw'
+            ? 'Mpaka una majira ya WGS84 yasiyo sahihi.'
+            : 'Polygon contains invalid WGS84 coordinates.',
         areaSqm: 0,
         waterSurfaceSqm: 0,
         perimeterM: 0,
@@ -132,7 +141,10 @@ export function measureAndValidatePolygon(opts: {
   if (!geojson) {
     return {
       valid: false,
-      error: 'Could not construct a valid GeoJSON polygon ring.',
+      error:
+        lang === 'sw'
+          ? 'Imeshindikana kutengeneza umbo halali la GeoJSON.'
+          : 'Could not construct a valid GeoJSON polygon ring.',
       areaSqm: 0,
       waterSurfaceSqm: 0,
       perimeterM: 0,
@@ -151,7 +163,9 @@ export function measureAndValidatePolygon(opts: {
       return {
         valid: false,
         error:
-          'Boundary lines cross each other (self-intersection detected). Drag vertices so edges do not overlap.',
+          lang === 'sw'
+            ? 'Mistari ya mpaka inakatana yenyewe. Buruta nukta za pembe ili mistari isipishane.'
+            : 'Boundary lines cross each other (self-intersection detected). Drag vertices so edges do not overlap.',
         areaSqm: 0,
         waterSurfaceSqm: 0,
         perimeterM: 0,
@@ -178,7 +192,10 @@ export function measureAndValidatePolygon(opts: {
     if (areaSqm < 4) {
       return {
         valid: false,
-        error: `Polygon area (${areaSqm} m²) is too small. Minimum valid unit footprint is 4 m².`,
+        error:
+          lang === 'sw'
+            ? `Eneo la umbo (${areaSqm} m²) ni dogo mno. Kiwango cha chini halali ni 4 m².`
+            : `Polygon area (${areaSqm} m²) is too small. Minimum valid unit footprint is 4 m².`,
         areaSqm,
         waterSurfaceSqm: areaSqm,
         perimeterM,
@@ -193,7 +210,10 @@ export function measureAndValidatePolygon(opts: {
     if (areaSqm > 2_000_000) {
       return {
         valid: false,
-        error: `Polygon area (${areaSqm.toLocaleString()} m²) exceeds maximum single production unit limit (200 ha). Zoom closer to map the pond accurately.`,
+        error:
+          lang === 'sw'
+            ? `Eneo (${areaSqm.toLocaleString()} m²) limezidi kikomo cha bwawa moja (hekta 200). Kuza ramani karibu zaidi kupima kwa usahihi.`
+            : `Polygon area (${areaSqm.toLocaleString()} m²) exceeds maximum single production unit limit (200 ha). Zoom closer to map the pond accurately.`,
         areaSqm,
         waterSurfaceSqm: areaSqm,
         perimeterM,
@@ -217,7 +237,10 @@ export function measureAndValidatePolygon(opts: {
       if (distanceFromFarmM > maxRadius) {
         return {
           valid: false,
-          error: `Mapped pond is ${(distanceFromFarmM / 1000).toFixed(2)} km away from the selected farm branch (authorized geofence: ${(maxRadius / 1000).toFixed(1)} km).`,
+          error:
+            lang === 'sw'
+              ? `Bwawa liko umbali wa km ${(distanceFromFarmM / 1000).toFixed(2)} kutoka tawi la shamba lililochaguliwa (mpaka unaoruhusiwa: km ${(maxRadius / 1000).toFixed(1)}).`
+              : `Mapped pond is ${(distanceFromFarmM / 1000).toFixed(2)} km away from the selected farm branch (authorized geofence: ${(maxRadius / 1000).toFixed(1)} km).`,
           areaSqm,
           waterSurfaceSqm: areaSqm,
           perimeterM,
@@ -231,14 +254,18 @@ export function measureAndValidatePolygon(opts: {
       }
       if (distanceFromFarmM > 2000) {
         warnings.push(
-          `Pond center is ${(distanceFromFarmM / 1000).toFixed(2)} km from the farm headquarters pin.`
+          lang === 'sw'
+            ? `Katikati ya bwawa iko km ${(distanceFromFarmM / 1000).toFixed(2)} kutoka ofisi kuu ya shamba.`
+            : `Pond center is ${(distanceFromFarmM / 1000).toFixed(2)} km from the farm headquarters pin.`
         );
       }
     }
 
     if (typeof opts.gpsAccuracyM === 'number' && opts.gpsAccuracyM > 10) {
       warnings.push(
-        `GPS accuracy was ±${Math.round(opts.gpsAccuracyM)} m. For legal or engineering surveys, verify corners on satellite imagery or use survey-grade GNSS.`
+        lang === 'sw'
+          ? `Usahihi wa GPS ulikuwa ±${Math.round(opts.gpsAccuracyM)} m. Kwa upimaji sahihi zaidi, rekebisha pembe kwenye satelaiti.`
+          : `GPS accuracy was ±${Math.round(opts.gpsAccuracyM)} m. For legal or engineering surveys, verify corners on satellite imagery or use survey-grade GNSS.`
       );
     }
 
@@ -262,7 +289,10 @@ export function measureAndValidatePolygon(opts: {
   } catch {
     return {
       valid: false,
-      error: 'Unable to process polygon geometry. Please redraw the boundary.',
+      error:
+        lang === 'sw'
+          ? 'Imeshindikana kuchakata jiometri ya mpaka. Tafadhali chora upya.'
+          : 'Unable to process polygon geometry. Please redraw the boundary.',
       areaSqm: 0,
       waterSurfaceSqm: 0,
       perimeterM: 0,

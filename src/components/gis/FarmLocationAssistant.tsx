@@ -4,13 +4,16 @@ import {
   CheckCircle2,
   Crosshair,
   MapPin,
+  Maximize2,
+  Minimize2,
   Search,
   AlertTriangle,
   X,
   Loader2,
 } from 'lucide-react';
 import { Farm, FarmLocationSource } from '../../types/aquaculture';
-import { Button, Card, FormError, INPUT_CLASS } from '../../ui';
+import { Button, Card, FormError, INPUT_CLASS, useLanguage } from '../../ui';
+import { tr } from '../../i18n/translations';
 import { getTileConfigForMode } from '../../utils/gis';
 
 export interface SaveFarmLocationPayload {
@@ -52,10 +55,11 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
   onCancel,
   onSaveFarm,
 }) => {
+  const { language } = useLanguage();
   const [name, setName] = useState('');
   const [region, setRegion] = useState('Dar es Salaam');
-  const [waterSource, setWaterSource] = useState('Borehole + Filtered Freshwater');
-  const [drainageSystem, setDrainageSystem] = useState('Gravity Sedimentation Canal');
+  const [waterSource, setWaterSource] = useState('Kisima Kirefu + Maji Safi Yaliyochujwa');
+  const [drainageSystem, setDrainageSystem] = useState('Mfereji wa Mvutano wa Kutolea Maji');
   const [fircisPermitNo, setFircisPermitNo] = useState(
     `FiRCIS-TZ-${new Date().getFullYear()}-${String(100 + existingFarms.length * 37)}`
   );
@@ -80,7 +84,8 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
     initialLocation?.placeName || 'Kigamboni, Dar es Salaam'
   );
   const [locationConfirmed, setLocationConfirmed] = useState(Boolean(initialLocation?.gps));
-  const [mapStyle, setMapStyle] = useState<'satellite' | 'street'>('satellite');
+  const [mapStyle, setMapStyle] = useState<'satellite' | 'street' | 'terrain'>('satellite');
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   const [formMsg, setFormMsg] = useState('');
   const [formShake, setFormShake] = useState(0);
@@ -158,11 +163,11 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
     const pinIcon = L.divIcon({
       className: 'custom-pond-pin',
       html: `<div style="display:flex;flex-direction:column;align-items:center;">
-        <div style="background:#0284c7;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:9999px;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.4);white-space:nowrap;">Farm Site (Drag me)</div>
+        <div style="background:#0284c7;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:9999px;border:2px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,0.4);white-space:nowrap;">${tr(language, 'Eneo la Shamba (Buruta)', 'Farm Site (Drag me)')}</div>
         <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #0284c7;margin-top:-1px;"></div>
       </div>`,
-      iconSize: [140, 36],
-      iconAnchor: [70, 36],
+      iconSize: [148, 36],
+      iconAnchor: [74, 36],
     });
 
     const marker = L.marker(selectedGps, { icon: pinIcon, draggable: true }).addTo(map);
@@ -184,14 +189,40 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
     mapRef.current = map;
     markerRef.current = marker;
 
-    const timer = window.setTimeout(() => map.invalidateSize(), 150);
+    const invalidate = () => map.invalidateSize({ animate: false });
+    window.addEventListener('resize', invalidate);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+      resizeObserver = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
+    const timer = window.setTimeout(invalidate, 150);
     return () => {
       window.clearTimeout(timer);
+      window.removeEventListener('resize', invalidate);
+      resizeObserver?.disconnect();
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const t1 = window.setTimeout(() => map.invalidateSize({ animate: false }), 60);
+    const t2 = window.setTimeout(() => map.invalidateSize({ animate: false }), 240);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMapFullscreen) setIsMapFullscreen(false);
+    };
+    if (isMapFullscreen) window.addEventListener('keydown', onKey);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isMapFullscreen]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -208,7 +239,13 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
   const handleUseMyLocation = () => {
     setGpsError('');
     if (!navigator.geolocation) {
-      setGpsError('Location is unavailable on this browser. Search your village or tap the map instead.');
+      setGpsError(
+        tr(
+          language,
+          'GPS haipatikani kwenye kivinjari hiki. Tafuta kijiji chako au gusa ramani.',
+          'Location is unavailable on this browser. Search your village or tap the map instead.'
+        )
+      );
       return;
     }
     setLocatingGps(true);
@@ -226,8 +263,16 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
         setLocatingGps(false);
         setGpsError(
           err.code === err.PERMISSION_DENIED
-            ? 'Location permission denied. Enable location in browser settings or search your village/ward above.'
-            : 'Could not get a GPS fix right now. Try searching your village/ward or tapping the map.'
+            ? tr(
+                language,
+                'Ruhusa ya eneo imezuiwa. Washa ruhusa ya eneo kwenye kivinjari au tafuta kijiji/kata hapo juu.',
+                'Location permission denied. Enable location in browser settings or search your village/ward above.'
+              )
+            : tr(
+                language,
+                'Imeshindikana kupata mawimbi ya GPS sasa hivi. Jaribu kutafuta kijiji au gusa ramani.',
+                'Could not get a GPS fix right now. Try searching your village/ward or tapping the map.'
+              )
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
@@ -246,10 +291,22 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
       const list = data.results || [];
       setSuggestions(list);
       if (list.length === 0) {
-        setSearchError('No matching place found in Tanzania. Try a nearby town/ward or drag the pin on the satellite map.');
+        setSearchError(
+          tr(
+            language,
+            'Hakuna eneo lililopatikana Tanzania kwa jina hilo. Jaribu mji/kata ya karibu au buruta alama kwenye ramani.',
+            'No matching place found in Tanzania. Try a nearby town/ward or drag the pin on the satellite map.'
+          )
+        );
       }
     } catch {
-      setSearchError('Search service unreachable. Tap or drag the marker on the satellite map.');
+      setSearchError(
+        tr(
+          language,
+          'Huduma ya kutafuta haipatikani. Gusa au buruta alama kwenye ramani ya satelaiti.',
+          'Search service unreachable. Tap or drag the marker on the satellite map.'
+        )
+      );
     } finally {
       setSearching(false);
     }
@@ -266,19 +323,29 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
       skipReverse: true,
     });
     if (!name.trim()) {
-      setName(`${item.title} Aquaculture Farm`);
+      setName(
+        language === 'sw'
+          ? `Shamba la Samaki la ${item.title}`
+          : `${item.title} Aquaculture Farm`
+      );
     }
   };
 
   const handleSave = () => {
     setFormMsg('');
     if (!name.trim()) {
-      setFormMsg('Enter a farm name before saving.');
+      setFormMsg(tr(language, 'Ingiza jina la shamba kabla ya kuhifadhi.', 'Enter a farm name before saving.'));
       setFormShake((n) => n + 1);
       return;
     }
     if (!locationConfirmed) {
-      setFormMsg('Search for a location, use your current GPS, or tap the satellite map to set your farm pin.');
+      setFormMsg(
+        tr(
+          language,
+          'Tafuta eneo, tumia GPS ya sasa, au gusa ramani kuweka alama ya shamba.',
+          'Search for a location, use your current GPS, or tap the satellite map to set your farm pin.'
+        )
+      );
       setFormShake((n) => n + 1);
       return;
     }
@@ -295,7 +362,7 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
       placeName,
     });
     if (!res.ok) {
-      setFormMsg(res.error || 'Could not register farm.');
+      setFormMsg(res.error || tr(language, 'Imeshindikana kusajili shamba.', 'Could not register farm.'));
       setFormShake((n) => n + 1);
     }
   };
@@ -304,23 +371,33 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
     locationAccuracyM === undefined
       ? null
       : locationAccuracyM <= 10
-        ? { label: 'Good accuracy', cls: 'text-emerald-700 dark:text-emerald-400' }
+        ? { label: tr(language, 'Usahihi mzuri', 'Good accuracy'), cls: 'text-emerald-700 dark:text-emerald-400' }
         : locationAccuracyM <= 30
-          ? { label: 'Moderate accuracy — verify pin on satellite', cls: 'text-amber-700 dark:text-amber-400' }
-          : { label: 'Low accuracy — drag pin to exact farm gate', cls: 'text-rose-700 dark:text-rose-400' };
+          ? {
+              label: tr(language, 'Usahihi wa wastani — hakiki alama kwenye satelaiti', 'Moderate accuracy — verify pin on satellite'),
+              cls: 'text-amber-700 dark:text-amber-400',
+            }
+          : {
+              label: tr(language, 'Usahihi mdogo — buruta alama hadi geti la shamba', 'Low accuracy — drag pin to exact farm gate'),
+              cls: 'text-rose-700 dark:text-rose-400',
+            };
 
   return (
     <Card className="border-sky-200 dark:border-sky-800/70">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
         <div>
           <div className="text-[11px] font-semibold text-sky-700 dark:text-sky-400">
-            Quick Location Assistant
+            {tr(language, 'Msaidizi wa Haraka wa Eneo', 'Quick Location Assistant')}
           </div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            Where is your farm?
+            {tr(language, 'Shamba lako liko wapi?', 'Where is your farm?')}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Find your farm automatically with GPS or search your village/ward, then confirm the pin on the satellite map.
+            {tr(
+              language,
+              'Tafuta shamba lako moja kwa moja kwa GPS au andika kijiji/kata, kisha thibitisha alama kwenye satelaiti.',
+              'Find your farm automatically with GPS or search your village/ward, then confirm the pin on the satellite map.'
+            )}
           </p>
         </div>
         <button
@@ -328,7 +405,7 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
           onClick={onCancel}
           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
         >
-          <X className="h-3.5 w-3.5" /> Cancel
+          <X className="h-3.5 w-3.5" /> {tr(language, 'Ghairi', 'Cancel')}
         </button>
       </div>
 
@@ -346,11 +423,11 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search village, ward, landmark or farm..."
+                  placeholder={tr(language, 'Tafuta kijiji, kata, mji au shamba...', 'Search village, ward, landmark or farm...')}
                   className={`${INPUT_CLASS} pl-9`}
                 />
                 <Button type="submit" variant="secondary" size="md" loading={searching}>
-                  Find
+                  {tr(language, 'Tafuta', 'Find')}
                 </Button>
               </div>
               {suggestions.length > 0 && (
@@ -392,7 +469,9 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
               ) : (
                 <Crosshair className="h-4 w-4" />
               )}
-              {locatingGps ? 'Finding your GPS location...' : 'Use my current location'}
+              {locatingGps
+                ? tr(language, 'Inatafuta eneo lako la GPS...', 'Finding your GPS location...')
+                : tr(language, 'Tumia eneo langu la sasa', 'Use my current location')}
             </button>
 
             {gpsError && (
@@ -406,10 +485,12 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
           {/* Selected Location Confirmation Box */}
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 text-xs dark:border-emerald-900/60 dark:bg-emerald-950/30">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 dark:text-white">Selected farm location</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {tr(language, 'Eneo la shamba lililochaguliwa', 'Selected farm location')}
+              </span>
               {locationConfirmed && (
                 <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Pin placed
+                  <CheckCircle2 className="h-3.5 w-3.5" /> {tr(language, 'Alama imewekwa', 'Pin placed')}
                 </span>
               )}
             </div>
@@ -417,18 +498,22 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
             <div className="mt-1 font-mono text-[11px] text-slate-600 tabular-nums dark:text-slate-400">
               {selectedGps[0].toFixed(5)}, {selectedGps[1].toFixed(5)} ·{' '}
               {locationSource === 'GPS'
-                ? 'Detected via GPS'
+                ? tr(language, 'Imetambuliwa kwa GPS', 'Detected via GPS')
                 : locationSource === 'SEARCH'
-                  ? 'Selected from search'
-                  : 'Adjusted on satellite'}
+                  ? tr(language, 'Imechaguliwa kwa kutafuta', 'Selected from search')
+                  : tr(language, 'Imerekebishwa kwenye satelaiti', 'Adjusted on satellite')}
             </div>
             {locationAccuracyM !== undefined && accuracyStatus && (
               <div className={`mt-1 text-[11px] font-semibold tabular-nums ${accuracyStatus.cls}`}>
-                GPS accuracy: ±{locationAccuracyM} m · {accuracyStatus.label}
+                {tr(language, 'Usahihi wa GPS', 'GPS accuracy')}: ±{locationAccuracyM} m · {accuracyStatus.label}
               </div>
             )}
             <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-              Not quite on the gate? Tap anywhere on the satellite map or drag the blue pin to adjust.
+              {tr(
+                language,
+                'Haijakaa sawasawa? Gusa popote kwenye ramani au buruta alama ya bluu kurekebisha.',
+                'Not quite on the gate? Tap anywhere on the satellite map or drag the blue pin to adjust.'
+              )}
             </p>
           </div>
 
@@ -436,20 +521,20 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
           <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
             <div>
               <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                Farm Name *
+                {tr(language, 'Jina la Shamba *', 'Farm Name *')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Bagamoyo Coastal Tilapia Farm"
+                placeholder={tr(language, 'mfano: Shamba la Sato Bagamoyo', 'e.g. Bagamoyo Coastal Tilapia Farm')}
                 className={INPUT_CLASS}
               />
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Region / District
+                  {tr(language, 'Mkoa / Wilaya', 'Region / District')}
                 </label>
                 <input
                   type="text"
@@ -460,7 +545,7 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  FiRCIS Permit No.
+                  {tr(language, 'Na. ya Kibali cha FiRCIS', 'FiRCIS Permit No.')}
                 </label>
                 <input
                   type="text"
@@ -471,7 +556,7 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Water Source
+                  {tr(language, 'Chanzo cha Maji', 'Water Source')}
                 </label>
                 <input
                   type="text"
@@ -482,7 +567,7 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Drainage System
+                  {tr(language, 'Mfumo wa Kutolea Maji', 'Drainage System')}
                 </label>
                 <input
                   type="text"
@@ -496,57 +581,106 @@ export const FarmLocationAssistant: React.FC<FarmLocationAssistantProps> = ({
 
           <div className="flex items-center justify-between gap-2">
             <Button variant="secondary" size="md" onClick={onCancel}>
-              Cancel
+              {tr(language, 'Ghairi', 'Cancel')}
             </Button>
             <Button variant="success" size="md" onClick={handleSave}>
-              <CheckCircle2 className="h-4 w-4" /> Confirm farm location
+              <CheckCircle2 className="h-4 w-4" /> {tr(language, 'Thibitisha Eneo la Shamba', 'Confirm farm location')}
             </Button>
           </div>
         </div>
 
-        {/* Right: Clean Interactive Satellite Map */}
+        {/* Right: Clean Interactive Satellite / Street / Terrain Map */}
         <div className="space-y-2 lg:col-span-7">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Visual confirmation on satellite imagery (drag pin or tap exact site)
-            </span>
-            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-              <button
-                type="button"
-                onClick={() => setMapStyle('satellite')}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                  mapStyle === 'satellite' ? 'bg-[#0284c7] text-white' : 'text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                Satellite
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapStyle('street')}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                  mapStyle === 'street' ? 'bg-[#0284c7] text-white' : 'text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                Street
-              </button>
+          {isMapFullscreen && (
+            <div
+              className="fixed inset-0 z-[890] bg-slate-950/70 backdrop-blur-[2px]"
+              onClick={() => setIsMapFullscreen(false)}
+            />
+          )}
+          <div
+            className={
+              isMapFullscreen
+                ? 'fixed inset-3 z-[900] flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-slate-900 shadow-2xl dark:border-slate-700'
+                : 'relative h-[450px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 dark:border-slate-700'
+            }
+          >
+            <div ref={mapContainerRef} className="h-full w-full flex-1" />
+
+            {/* Top-Left Hint Pill */}
+            <div className="pointer-events-none absolute top-3 left-3 z-[400] rounded-xl border border-slate-200/90 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100">
+              {tr(language, 'Gusa ramani au buruta alama ya bluu kuweka eneo la shamba', 'Tap map or drag blue pin to set farm gate')}
             </div>
-          </div>
-          <div className="relative h-[430px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 dark:border-slate-700">
-            <div ref={mapContainerRef} className="h-full w-full" />
-            <div className="pointer-events-auto absolute bottom-3 right-3 z-[400] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md dark:border-slate-700 dark:bg-slate-900">
+
+            {/* Top-Right: Satellite | Street | Terrain */}
+            <div className="pointer-events-auto absolute top-3 right-3 z-[400] flex items-center gap-0.5 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+              {(
+                [
+                  { id: 'satellite', label: tr(language, 'Satelaiti', 'Satellite') },
+                  { id: 'street', label: tr(language, 'Mtaa', 'Street') },
+                  { id: 'terrain', label: tr(language, 'Mandhari', 'Terrain') },
+                ] as const
+              ).map((style) => (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => setMapStyle(style.id)}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    mapStyle === style.id
+                      ? 'bg-[#1D72E8] text-white shadow-xs'
+                      : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {style.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Left Vertical Stack: + / - / GPS / Fullscreen */}
+            <div className="pointer-events-auto absolute top-14 left-3 z-[400] flex flex-col gap-2">
+              <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+                <button
+                  type="button"
+                  onClick={() => mapRef.current?.zoomIn()}
+                  aria-label={tr(language, 'Kuza ramani', 'Zoom in')}
+                  className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-base font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mapRef.current?.zoomOut()}
+                  aria-label={tr(language, 'Punguza ramani', 'Zoom out')}
+                  className="flex h-8 w-8 items-center justify-center text-base font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200"
+                >
+                  −
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => mapRef.current?.zoomIn()}
-                className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-base font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
+                onClick={handleUseMyLocation}
+                disabled={locatingGps}
+                title={tr(language, 'Tumia eneo la GPS la sasa', 'Use current GPS location')}
+                aria-label={tr(language, 'Tumia eneo la GPS la sasa', 'Use current GPS location')}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-sky-600 shadow-md backdrop-blur-xs hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/95 dark:text-sky-400"
               >
-                +
+                {locatingGps ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
               </button>
               <button
                 type="button"
-                onClick={() => mapRef.current?.zoomOut()}
-                className="flex h-8 w-8 items-center justify-center text-base font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200"
+                onClick={() => setIsMapFullscreen((v) => !v)}
+                title={
+                  isMapFullscreen
+                    ? tr(language, 'Toka kwenye skrini nzima', 'Exit full-screen map')
+                    : tr(language, 'Panua ramani skrini nzima', 'Expand full-screen map')
+                }
+                aria-label={
+                  isMapFullscreen
+                    ? tr(language, 'Toka kwenye skrini nzima', 'Exit full-screen map')
+                    : tr(language, 'Panua ramani skrini nzima', 'Expand full-screen map')
+                }
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-slate-700 shadow-md backdrop-blur-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-200"
               >
-                −
+                {isMapFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
             </div>
           </div>

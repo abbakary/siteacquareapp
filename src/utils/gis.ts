@@ -1,4 +1,4 @@
-import { InfrastructureMarkerType, MapViewMode } from '../types/aquaculture';
+import { InfrastructureMarkerType, Language, MapViewMode } from '../types/aquaculture';
 import { stripClosingDuplicate } from './gisGeometry';
 
 export interface TileLayerDefinition {
@@ -125,7 +125,10 @@ export const INFRASTRUCTURE_META: Record<
 /**
  * Parses a GPX XML file (<trkpt>, <rtept>, or <wpt>) into Leaflet [lat, lng][] coordinates.
  */
-export function parseGpxToPolygonLatLngs(xmlText: string): {
+export function parseGpxToPolygonLatLngs(
+  xmlText: string,
+  language: Language = 'sw'
+): {
   ok: boolean;
   points: [number, number][];
   name?: string;
@@ -135,7 +138,11 @@ export function parseGpxToPolygonLatLngs(xmlText: string): {
     const parser = new DOMParser();
     const doc = parser.parseFromString(xmlText, 'application/xml');
     if (doc.querySelector('parsererror')) {
-      return { ok: false, points: [], error: 'Invalid GPX XML file.' };
+      return {
+        ok: false,
+        points: [],
+        error: language === 'sw' ? 'Faili la GPX XML si sahihi.' : 'Invalid GPX XML file.',
+      };
     }
 
     const nameEl = doc.querySelector('trk > name, rte > name, metadata > name');
@@ -159,7 +166,10 @@ export function parseGpxToPolygonLatLngs(xmlText: string): {
       return {
         ok: false,
         points: [],
-        error: 'GPX file must contain at least 3 valid track, route, or waypoint coordinates.',
+        error:
+          language === 'sw'
+            ? 'Faili la GPX lazima liwe na angalau nukta 3 halali za mpaka.'
+            : 'GPX file must contain at least 3 valid track, route, or waypoint coordinates.',
       };
     }
 
@@ -169,7 +179,11 @@ export function parseGpxToPolygonLatLngs(xmlText: string): {
       name: nameEl?.textContent?.trim() || undefined,
     };
   } catch {
-    return { ok: false, points: [], error: 'Failed to parse GPX file.' };
+    return {
+      ok: false,
+      points: [],
+      error: language === 'sw' ? 'Imeshindikana kusoma faili la GPX.' : 'Failed to parse GPX file.',
+    };
   }
 }
 
@@ -177,7 +191,10 @@ export function parseGpxToPolygonLatLngs(xmlText: string): {
  * Parses a GeoJSON file (Polygon, MultiPolygon, Feature, or FeatureCollection)
  * converting GeoJSON [lng, lat] order into Leaflet [lat, lng] polygons.
  */
-export function parseGeoJsonToPolygonLatLngs(jsonText: string): {
+export function parseGeoJsonToPolygonLatLngs(
+  jsonText: string,
+  language: Language = 'sw'
+): {
   ok: boolean;
   polygons: Array<{ name?: string; points: [number, number][] }>;
   error?: string;
@@ -251,13 +268,20 @@ export function parseGeoJsonToPolygonLatLngs(jsonText: string): {
       return {
         ok: false,
         polygons: [],
-        error: 'No valid Polygon or MultiPolygon features found in the GeoJSON file.',
+        error:
+          language === 'sw'
+            ? 'Hakuna mipaka halali ya Polygon au MultiPolygon ndani ya faili la GeoJSON.'
+            : 'No valid Polygon or MultiPolygon features found in the GeoJSON file.',
       };
     }
 
     return { ok: true, polygons };
   } catch {
-    return { ok: false, polygons: [], error: 'Invalid GeoJSON syntax.' };
+    return {
+      ok: false,
+      polygons: [],
+      error: language === 'sw' ? 'Muundo wa GeoJSON si sahihi.' : 'Invalid GeoJSON syntax.',
+    };
   }
 }
 

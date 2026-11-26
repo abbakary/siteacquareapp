@@ -13,7 +13,8 @@ import {
 import { AquacultureState, Pond } from '../types/aquaculture';
 import { exportToCsv, formatTzs, todayIso } from '../utils/formatters';
 import { getPermissions } from '../utils/rbac';
-import { Button, FormError, INPUT_CLASS, Sheet, ValidCheck, usePreferences } from '../ui';
+import { tDomain, tr } from '../i18n/translations';
+import { Button, FormError, INPUT_CLASS, Sheet, ValidCheck, useLanguage, usePreferences } from '../ui';
 
 export type QuickActionType =
   | 'feeding'
@@ -106,6 +107,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
   onRecordHarvest,
   onOpenQuickSaleForLot,
 }) => {
+  const { language } = useLanguage();
   const perms = getPermissions(state.activeUser.role);
   const { triggerHaptic } = usePreferences();
 
@@ -180,7 +182,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
   const [mortPond, setMortPond] = useState('POND-003');
   const [deadCount, setDeadCount] = useState(5);
   const [affectedCount, setAffectedCount] = useState(12);
-  const [symptoms, setSymptoms] = useState('Reduced feeding response near inlet');
+  const [symptoms, setSymptoms] = useState('Kupungua kwa hamu ya kula karibu na mlango wa maji');
 
   // Harvest Lot state (empty defaults — never pre-filled with dummy sale values)
   const [harvPond, setHarvPond] = useState('');
@@ -267,7 +269,13 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
       }
       if (data.feedType) setFeedType(data.feedType);
     } catch {
-      showValidationError('Could not parse Swahili voice transcript.');
+      showValidationError(
+        tr(
+          language,
+          'Imeshindwa kuchambua maelezo ya sauti ya Kiswahili.',
+          'Could not parse Swahili voice transcript.'
+        )
+      );
     } finally {
       setVoiceParsing(false);
     }
@@ -282,12 +290,18 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
       {renderedModal === 'harvest' && <Scale className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
       {renderedModal === 'report' && <FileDown className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
       <span>
-        {renderedModal === 'feeding' && 'Record Feeding & Feed Reconciliation'}
-        {renderedModal === 'inventory' && 'Inventory Restock & Purchase Entry'}
-        {renderedModal === 'water' && 'Record Water Quality Reading'}
-        {renderedModal === 'mortality' && 'Report Fish Mortality (Immutable Log)'}
-        {renderedModal === 'harvest' && 'Record Harvest Lot (Graded Stock)'}
-        {renderedModal === 'report' && 'Generate Tanzania Traceability & FiRCIS Reports'}
+        {renderedModal === 'feeding' &&
+          tr(language, 'Rekodi Ulishaji na Uhakiki wa Chakula', 'Record Feeding & Feed Reconciliation')}
+        {renderedModal === 'inventory' &&
+          tr(language, 'Kuongeza Akiba na Manunuzi ya Bohari', 'Inventory Restock & Purchase Entry')}
+        {renderedModal === 'water' &&
+          tr(language, 'Rekodi Kipimo cha Ubora wa Maji', 'Record Water Quality Reading')}
+        {renderedModal === 'mortality' &&
+          tr(language, 'Ripoti Vifo vya Samaki (Kumbukumbu Isiyofutika)', 'Report Fish Mortality (Immutable Log)')}
+        {renderedModal === 'harvest' &&
+          tr(language, 'Rekodi Kundi la Mavuno (Akiba Iliyopangwa)', 'Record Harvest Lot (Graded Stock)')}
+        {renderedModal === 'report' &&
+          tr(language, 'Tengeneza Ripoti za Ufuatiliaji na FiRCIS Tanzania', 'Generate Tanzania Traceability & FiRCIS Reports')}
       </span>
     </span>
   );
@@ -309,7 +323,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
           <div className="space-y-3">
             {!perms.canRecordFeeding && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-200">
-                Role notice: Current role ({state.activeUser.roleLabel}) typically views or approves plans. Switch to Keeper or Farm Manager in the sidebar to record field feeding.
+                {tr(
+                  language,
+                  `Tahadhari ya wajibu: Wajibu wa sasa (${tDomain(language, state.activeUser.roleLabel)}) huona au kuidhinisha mipango tu. Badilisha kwenda Msimamizi wa Bwawa au Meneja wa Shamba pembeni kurekodi ulishaji.`,
+                  `Role notice: Current role (${state.activeUser.roleLabel}) typically views or approves plans. Switch to Keeper or Farm Manager in the sidebar to record field feeding.`
+                )}
               </div>
             )}
 
@@ -317,7 +335,8 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
             <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900/60 dark:bg-sky-950/40">
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-sky-900 dark:text-sky-200">
-                  <Mic className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" /> Swahili Voice / Field Report Parser
+                  <Mic className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />{' '}
+                  {tr(language, 'Mchambuzi wa Sauti / Ripoti ya Kiswahili', 'Swahili Voice / Field Report Parser')}
                 </span>
                 <Button
                   size="sm"
@@ -325,7 +344,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   loading={voiceParsing}
                   onClick={handleParseSwahili}
                 >
-                  {voiceParsing ? 'Parsing...' : 'Auto-Fill from Swahili'}
+                  {voiceParsing
+                    ? tr(language, 'Inachambua...', 'Parsing...')
+                    : tr(language, 'Jaza kutoka Kiswahili', 'Auto-Fill from Swahili')}
                 </Button>
               </div>
               <input
@@ -338,7 +359,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Pond</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Bwawa', 'Pond')}
+                </label>
                 <select
                   value={feedPond}
                   onChange={(e) => setFeedPond(e.target.value)}
@@ -352,7 +375,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Feed Type</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Aina ya Chakula', 'Feed Type')}
+                </label>
                 <input
                   type="text"
                   value={feedType}
@@ -364,7 +389,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Approved (kg)</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Kilichoidhinishwa (kg)', 'Approved (kg)')}
+                </label>
                 <input
                   type="number"
                   step="0.5"
@@ -374,7 +401,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Store Issued (kg)</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Kilichotolewa Bohari (kg)', 'Store Issued (kg)')}
+                </label>
                 <input
                   type="number"
                   step="0.5"
@@ -385,7 +414,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               </div>
               <div>
                 <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
-                  <span>Actual Fed (kg)</span>
+                  <span>{tr(language, 'Kilicholishwa Halisi (kg)', 'Actual Fed (kg)')}</span>
                   <ValidCheck valid={actualFedKg > 0} />
                 </label>
                 <input
@@ -400,8 +429,17 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
 
             {Math.abs(issuedKg - actualFedKg) > 0.1 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-200">
-                Variance Alert: Issued {issuedKg} kg vs Actual Fed {actualFedKg} kg (Diff:{' '}
-                <strong>{Math.abs(issuedKg - actualFedKg).toFixed(1)} kg</strong>) will be flagged for Manager investigation.
+                {tr(
+                  language,
+                  `Tahadhari ya Tofauti: Kilichotolewa ${issuedKg} kg dhidi ya Kilicholishwa ${actualFedKg} kg (Tofauti: `,
+                  `Variance Alert: Issued ${issuedKg} kg vs Actual Fed ${actualFedKg} kg (Diff: `
+                )}
+                <strong>{Math.abs(issuedKg - actualFedKg).toFixed(1)} kg</strong>
+                {tr(
+                  language,
+                  ') itaalamishwa kwa uchunguzi wa Meneja.',
+                  ') will be flagged for Manager investigation.'
+                )}
               </div>
             )}
 
@@ -412,7 +450,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               >
                 <span className="flex items-center gap-1">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  Digital PIN Signature (4-digit PIN)
+                  {tr(language, 'Sahihi ya PIN (PIN ya tarakimu 4)', 'Digital PIN Signature (4-digit PIN)')}
                 </span>
                 <ValidCheck valid={/^\d{4}$/.test(pin)} />
               </label>
@@ -421,7 +459,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 type="password"
                 inputMode="numeric"
                 maxLength={4}
-                placeholder="Enter 4-digit PIN"
+                placeholder={tr(language, 'Weka PIN ya tarakimu 4', 'Enter 4-digit PIN')}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 className={`${INPUT_CLASS} min-h-[44px] font-mono tracking-widest`}
@@ -445,14 +483,16 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   pin,
                 });
                 if (!res.ok) {
-                  showValidationError(res.error || 'PIN verification failed');
+                  showValidationError(res.error || tr(language, 'Uthibitishaji wa PIN umeshindikana', 'PIN verification failed'));
                   return;
                 }
                 setPin('');
                 triggerSuccessAndClose();
               }}
             >
-              {saveSuccess ? 'Feeding Saved' : 'Submit & Sign Feeding Log'}
+              {saveSuccess
+                ? tr(language, 'Ulishaji Umehifadhiwa', 'Feeding Saved')
+                : tr(language, 'Tuma na Tia Sahihi Rekodi ya Ulishaji', 'Submit & Sign Feeding Log')}
             </Button>
           </div>
         )}
@@ -490,7 +530,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                       : 'text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
-                  Restock Existing Product ({state.inventory.length})
+                  {tr(
+                    language,
+                    `Ongeza Bidhaa Iliyopo (${state.inventory.length})`,
+                    `Restock Existing Product (${state.inventory.length})`
+                  )}
                 </button>
                 <button
                   type="button"
@@ -510,7 +554,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                       : 'text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
-                  + Create New Product / Item
+                  {tr(language, '+ Unda Bidhaa / Kifaa Kipya', '+ Create New Product / Item')}
                 </button>
               </div>
 
@@ -520,7 +564,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-existing"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>Select Existing Item / Product *</span>
+                    <span>{tr(language, 'Chagua Bidhaa Iliyopo *', 'Select Existing Item / Product *')}</span>
                     <ValidCheck valid={Boolean(selectedExisting)} />
                   </label>
                   <select
@@ -529,28 +573,30 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     onChange={(e) => applyExistingItemSelection(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-semibold`}
                   >
-                    <option value="">Choose an item to restock...</option>
+                    <option value="">{tr(language, 'Chagua bidhaa ya kuongeza akiba...', 'Choose an item to restock...')}</option>
                     {state.inventory.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name} ({item.category} · Current: {item.stock.toLocaleString()} {item.unit})
+                        {item.name} ({tDomain(language, item.category)} · {tr(language, 'Ipo', 'Current')}: {item.stock.toLocaleString()} {item.unit})
                       </option>
                     ))}
                   </select>
                   {selectedExisting && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-3 rounded-lg bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
                       <span>
-                        Current Stock:{' '}
+                        {tr(language, 'Akiba ya Sasa:', 'Current Stock:')}{' '}
                         <strong className="tabular-nums">
                           {selectedExisting.stock.toLocaleString()} {selectedExisting.unit}
                         </strong>
                       </span>
                       <span>
-                        New Stock After Delivery:{' '}
+                        {tr(language, 'Akiba Mpya Baada ya Kupokea:', 'New Stock After Delivery:')}{' '}
                         <strong className="tabular-nums text-emerald-700 dark:text-emerald-300">
                           {(selectedExisting.stock + Math.max(0, parsedQty)).toLocaleString()} {invUnit}
                         </strong>
                       </span>
-                      <span>Reorder Level: {selectedExisting.reorderLevel} {selectedExisting.unit}</span>
+                      <span>
+                        {tr(language, 'Kiwango cha Chini:', 'Reorder Level:')} {selectedExisting.reorderLevel} {selectedExisting.unit}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -563,13 +609,13 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-name"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>Item / Product Name *</span>
+                    <span>{tr(language, 'Jina la Bidhaa *', 'Item / Product Name *')}</span>
                     <ValidCheck valid={invName.trim().length > 1} />
                   </label>
                   <input
                     id="qm-inv-name"
                     type="text"
-                    placeholder="e.g. Tilapia Grower Pellets 3mm"
+                    placeholder={tr(language, 'mf. Tilapia Grower Pellets 3mm', 'e.g. Tilapia Grower Pellets 3mm')}
                     value={invName}
                     onChange={(e) => setInvName(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px]`}
@@ -580,12 +626,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-sku"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    SKU / Item Code
+                    {tr(language, 'Msimbo wa Bidhaa (SKU)', 'SKU / Item Code')}
                   </label>
                   <input
                     id="qm-inv-sku"
                     type="text"
-                    placeholder="e.g. FEED-GRW-3MM"
+                    placeholder={tr(language, 'mf. FEED-GRW-3MM', 'e.g. FEED-GRW-3MM')}
                     value={invSku}
                     onChange={(e) => setInvSku(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-mono`}
@@ -600,7 +646,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-cat"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Category *
+                    {tr(language, 'Kundi *', 'Category *')}
                   </label>
                   <select
                     id="qm-inv-cat"
@@ -610,11 +656,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     }
                     className={`${INPUT_CLASS} min-h-[44px]`}
                   >
-                    <option value="Feed">Feed</option>
-                    <option value="Fingerlings">Fingerlings</option>
-                    <option value="Medicine">Medicine</option>
-                    <option value="Fuel">Fuel</option>
-                    <option value="Equipment">Equipment</option>
+                    <option value="Feed">{tDomain(language, 'Feed')}</option>
+                    <option value="Fingerlings">{tDomain(language, 'Fingerlings')}</option>
+                    <option value="Medicine">{tDomain(language, 'Medicine')}</option>
+                    <option value="Fuel">{tDomain(language, 'Fuel')}</option>
+                    <option value="Equipment">{tDomain(language, 'Equipment')}</option>
                   </select>
                 </div>
                 <div>
@@ -622,7 +668,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-date"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Purchase Date *
+                    {tr(language, 'Tarehe ya Manunuzi *', 'Purchase Date *')}
                   </label>
                   <input
                     id="qm-inv-date"
@@ -637,7 +683,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-reorder"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Min Reorder Level
+                    {tr(language, 'Kiwango cha Chini cha Kuagiza', 'Min Reorder Level')}
                   </label>
                   <input
                     id="qm-inv-reorder"
@@ -657,7 +703,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-qty"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>Quantity Purchased *</span>
+                    <span>{tr(language, 'Kiasi Kilichonunuliwa *', 'Quantity Purchased *')}</span>
                     <ValidCheck valid={parsedQty > 0} />
                   </label>
                   <input
@@ -665,7 +711,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     type="number"
                     min="0"
                     step="0.5"
-                    placeholder="e.g. 500"
+                    placeholder={tr(language, 'mf. 500', 'e.g. 500')}
                     value={invQty}
                     onChange={(e) => setInvQty(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-bold tabular-nums`}
@@ -676,7 +722,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-unit"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Unit *
+                    {tr(language, 'Kipimo *', 'Unit *')}
                   </label>
                   <select
                     id="qm-inv-unit"
@@ -686,13 +732,13 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     }}
                     className={`${INPUT_CLASS} min-h-[44px]`}
                   >
-                    <option value="kg">Kilograms (kg)</option>
-                    <option value="bags">Bags (25kg / 50kg)</option>
-                    <option value="litres">Litres</option>
-                    <option value="bottles">Bottles</option>
-                    <option value="pcs">Pieces (pcs)</option>
-                    <option value="packs">Packs / Sachets</option>
-                    <option value="fish">Live Fingerlings (fish)</option>
+                    <option value="kg">{tr(language, 'Kilogramu (kg)', 'Kilograms (kg)')}</option>
+                    <option value="bags">{tr(language, 'Mifuko (25kg / 50kg)', 'Bags (25kg / 50kg)')}</option>
+                    <option value="litres">{tr(language, 'Lita', 'Litres')}</option>
+                    <option value="bottles">{tr(language, 'Chupa', 'Bottles')}</option>
+                    <option value="pcs">{tr(language, 'Vipande (pcs)', 'Pieces (pcs)')}</option>
+                    <option value="packs">{tr(language, 'Pakiti / Sachet', 'Packs / Sachets')}</option>
+                    <option value="fish">{tr(language, 'Vifaranga Hai (samaki)', 'Live Fingerlings (fish)')}</option>
                   </select>
                 </div>
                 <div>
@@ -700,14 +746,14 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-cost"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>Unit Cost (TZS) *</span>
+                    <span>{tr(language, 'Gharama kwa Kipimo (TZS) *', 'Unit Cost (TZS) *')}</span>
                     <ValidCheck valid={parsedCost > 0} />
                   </label>
                   <input
                     id="qm-inv-cost"
                     type="number"
                     min="0"
-                    placeholder="e.g. 2800"
+                    placeholder={tr(language, 'mf. 2800', 'e.g. 2800')}
                     value={invCost}
                     onChange={(e) => setInvCost(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-bold tabular-nums`}
@@ -722,7 +768,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-lot"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Batch / Lot Number *
+                    {tr(language, 'Namba ya Kundi / Lot *', 'Batch / Lot Number *')}
                   </label>
                   <input
                     id="qm-inv-lot"
@@ -737,7 +783,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-expiry"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Expiry Date (if perishable)
+                    {tr(language, 'Tarehe ya Mwisho (ikiwa ipo)', 'Expiry Date (if perishable)')}
                   </label>
                   <input
                     id="qm-inv-expiry"
@@ -752,12 +798,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-invoice"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Supplier Invoice / GRN #
+                    {tr(language, 'Ankara / GRN # ya Msambazaji', 'Supplier Invoice / GRN #')}
                   </label>
                   <input
                     id="qm-inv-invoice"
                     type="text"
-                    placeholder="e.g. SUP-INV-094"
+                    placeholder={tr(language, 'mf. SUP-INV-094', 'e.g. SUP-INV-094')}
                     value={invInvoiceNo}
                     onChange={(e) => setInvInvoiceNo(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-mono`}
@@ -772,13 +818,13 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-supplier"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>Supplier Name *</span>
+                    <span>{tr(language, 'Jina la Msambazaji *', 'Supplier Name *')}</span>
                     <ValidCheck valid={invSupplier.trim().length > 1} />
                   </label>
                   <input
                     id="qm-inv-supplier"
                     type="text"
-                    placeholder="e.g. AquaFeed Tanzania Ltd"
+                    placeholder={tr(language, 'mf. AquaFeed Tanzania Ltd', 'e.g. AquaFeed Tanzania Ltd')}
                     value={invSupplier}
                     onChange={(e) => setInvSupplier(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px]`}
@@ -789,12 +835,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-supphone"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Supplier Phone (Optional)
+                    {tr(language, 'Simu ya Msambazaji (Si lazima)', 'Supplier Phone (Optional)')}
                   </label>
                   <input
                     id="qm-inv-supphone"
                     type="tel"
-                    placeholder="e.g. +255 713 456 789"
+                    placeholder={tr(language, 'mf. +255 713 456 789', 'e.g. +255 713 456 789')}
                     value={invSupplierPhone}
                     onChange={(e) => setInvSupplierPhone(e.target.value)}
                     className={`${INPUT_CLASS} min-h-[44px] font-mono`}
@@ -809,7 +855,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-paystatus"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Purchase Payment Status *
+                    {tr(language, 'Hali ya Malipo ya Manunuzi *', 'Purchase Payment Status *')}
                   </label>
                   <select
                     id="qm-inv-paystatus"
@@ -823,9 +869,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     }}
                     className={`${INPUT_CLASS} min-h-[44px] font-semibold`}
                   >
-                    <option value="Paid">Paid in Full</option>
-                    <option value="Partial">Partial Payment</option>
-                    <option value="Credit Debt">Credit / Pay Later</option>
+                    <option value="Paid">{tr(language, 'Imelipwa Yote', 'Paid in Full')}</option>
+                    <option value="Partial">{tr(language, 'Malipo ya Sehemu', 'Partial Payment')}</option>
+                    <option value="Credit Debt">{tr(language, 'Mkopo / Lipa Baadaye', 'Credit / Pay Later')}</option>
                   </select>
                 </div>
                 <div>
@@ -833,7 +879,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-paidamt"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Amount Paid Now (TZS)
+                    {tr(language, 'Kiasi Kilicholipwa Sasa (TZS)', 'Amount Paid Now (TZS)')}
                   </label>
                   <input
                     id="qm-inv-paidamt"
@@ -853,12 +899,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   htmlFor="qm-inv-notes"
                   className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  Delivery / Quality Inspection Notes
+                  {tr(language, 'Maelezo ya Uwasilishaji / Ukaguzi wa Ubora', 'Delivery / Quality Inspection Notes')}
                 </label>
                 <input
                   id="qm-inv-notes"
                   type="text"
-                  placeholder="Condition on arrival, storage warehouse/room, etc."
+                  placeholder={tr(language, 'Hali ilipofika, ghala/chumba cha kuhifadhi, n.k.', 'Condition on arrival, storage warehouse/room, etc.')}
                   value={invNotes}
                   onChange={(e) => setInvNotes(e.target.value)}
                   className={`${INPUT_CLASS} min-h-[42px]`}
@@ -867,13 +913,14 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
 
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5 text-xs dark:border-emerald-900/60 dark:bg-emerald-950/40">
                 <span className="text-slate-700 dark:text-slate-300">
-                  Total Purchase Value:{' '}
+                  {tr(language, 'Jumla ya Thamani ya Manunuzi:', 'Total Purchase Value:')}{' '}
                   <strong className="text-sm font-extrabold text-emerald-800 tabular-nums dark:text-emerald-300">
                     {formatTzs(totalCost)}
                   </strong>
                 </span>
                 <span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">
-                  Paid: {formatTzs(effectivePaid)} · Balance Due:{' '}
+                  {tr(language, 'Imelipwa:', 'Paid:')} {formatTzs(effectivePaid)} ·{' '}
+                  {tr(language, 'Baki:', 'Balance Due:')}{' '}
                   <strong className={balanceDue > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}>
                     {formatTzs(balanceDue)}
                   </strong>
@@ -887,19 +934,43 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 success={saveSuccess}
                 onClick={() => {
                   if (invMode === 'existing' && !invExistingId) {
-                    showValidationError('Select an existing inventory item or switch to Create New Product.');
+                    showValidationError(
+                      tr(
+                        language,
+                        'Chagua bidhaa iliyopo au badili kwenda Unda Bidhaa Mpya.',
+                        'Select an existing inventory item or switch to Create New Product.'
+                      )
+                    );
                     return;
                   }
                   if (!invName.trim() || !invSupplier.trim() || !invLotNumber.trim()) {
-                    showValidationError('Item name, batch/lot number, and supplier name are required.');
+                    showValidationError(
+                      tr(
+                        language,
+                        'Jina la bidhaa, namba ya lot, na jina la msambazaji vinahitajika.',
+                        'Item name, batch/lot number, and supplier name are required.'
+                      )
+                    );
                     return;
                   }
                   if (parsedQty <= 0 || parsedCost <= 0) {
-                    showValidationError('Enter quantity > 0 and unit cost > 0.');
+                    showValidationError(
+                      tr(
+                        language,
+                        'Weka kiasi > 0 na gharama ya kipimo > 0.',
+                        'Enter quantity > 0 and unit cost > 0.'
+                      )
+                    );
                     return;
                   }
                   if (invPaymentStatus === 'Partial' && (effectivePaid <= 0 || effectivePaid >= totalCost)) {
-                    showValidationError('For Partial payment, enter an amount paid between TZS 1 and Total Cost - 1.');
+                    showValidationError(
+                      tr(
+                        language,
+                        'Kwa malipo ya sehemu, weka kiasi kati ya TZS 1 na Jumla - 1.',
+                        'For Partial payment, enter an amount paid between TZS 1 and Total Cost - 1.'
+                      )
+                    );
                     return;
                   }
                   onAddInventory({
@@ -925,7 +996,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   triggerSuccessAndClose();
                 }}
               >
-                {saveSuccess ? 'Purchase & Stock Recorded' : 'Save Purchase & Update Stock'}
+                {saveSuccess
+                  ? tr(language, 'Manunuzi na Akiba Vimehifadhiwa', 'Purchase & Stock Recorded')
+                  : tr(language, 'Hifadhi Manunuzi na Sasisha Bohari', 'Save Purchase & Update Stock')}
               </Button>
             </div>
           );
@@ -936,7 +1009,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Pond</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Bwawa', 'Pond')}
+                </label>
                 <select
                   value={wqPond}
                   onChange={(e) => setWqPond(e.target.value)}
@@ -950,7 +1025,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Monitoring Level</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Ngazi ya Ufuatiliaji', 'Monitoring Level')}
+                </label>
                 <select
                   value={wqSource}
                   onChange={(e) =>
@@ -960,9 +1037,15 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   }
                   className={INPUT_CLASS}
                 >
-                  <option value="Manual (Mobile)">Level 1: Manual Mobile Entry</option>
-                  <option value="Bluetooth Meter">Level 2: Bluetooth Water Meter</option>
-                  <option value="IoT ESP32 Sensor">Level 3: ESP32 IoT Sensor</option>
+                  <option value="Manual (Mobile)">
+                    {tr(language, 'Ngazi 1: Ingizo la Simu (Mkono)', 'Level 1: Manual Mobile Entry')}
+                  </option>
+                  <option value="Bluetooth Meter">
+                    {tr(language, 'Ngazi 2: Kipima Maji cha Bluetooth', 'Level 2: Bluetooth Water Meter')}
+                  </option>
+                  <option value="IoT ESP32 Sensor">
+                    {tr(language, 'Ngazi 3: Sensor ya IoT ESP32', 'Level 3: ESP32 IoT Sensor')}
+                  </option>
                 </select>
               </div>
             </div>
@@ -988,7 +1071,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Temp (°C)</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Joto (°C)', 'Temp (°C)')}
+                </label>
                 <input
                   type="number"
                   step="0.1"
@@ -1020,7 +1105,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
             </div>
             {wqDo < 4.5 && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/60 dark:text-red-300">
-                Low Dissolved Oxygen (&lt; 4.5 mg/L) detected: System will automatically trigger the Pond Aerator Relay and notify the Technician!
+                {tr(
+                  language,
+                  'Oksijeni ndogo (< 4.5 mg/L) imebainika: Mfumo utawasha Kipulizia Hewa kiotomatiki na kumjulisha Mtaalamu!',
+                  'Low Dissolved Oxygen (< 4.5 mg/L) detected: System will automatically trigger the Pond Aerator Relay and notify the Technician!'
+                )}
               </div>
             )}
             <Button
@@ -1046,7 +1135,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 triggerSuccessAndClose();
               }}
             >
-              {saveSuccess ? 'Water Reading Saved' : 'Save Water Quality Measurement'}
+              {saveSuccess
+                ? tr(language, 'Kipimo cha Maji Kimehifadhiwa', 'Water Reading Saved')
+                : tr(language, 'Hifadhi Kipimo cha Ubora wa Maji', 'Save Water Quality Measurement')}
             </Button>
           </div>
         )}
@@ -1055,11 +1146,17 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
         {renderedModal === 'mortality' && (
           <div className="space-y-3">
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-200">
-              Accountability Rule: Mortality records are immutable once submitted. Keepers cannot delete records or self-approve medication.
+              {tr(
+                language,
+                'Kanuni ya Uwajibikaji: Rekodi za vifo haziwezi kufutwa baada ya kutumwa. Wasimamizi hawawezi kufuta rekodi au kuidhinisha dawa wenyewe.',
+                'Accountability Rule: Mortality records are immutable once submitted. Keepers cannot delete records or self-approve medication.'
+              )}
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Pond</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Bwawa', 'Pond')}
+                </label>
                 <select
                   value={mortPond}
                   onChange={(e) => setMortPond(e.target.value)}
@@ -1073,7 +1170,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Dead Fish</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Samaki Waliokufa', 'Dead Fish')}
+                </label>
                 <input
                   type="number"
                   min={1}
@@ -1083,7 +1182,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Affected Fish</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  {tr(language, 'Walioathirika', 'Affected Fish')}
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -1094,7 +1195,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Observed Symptoms</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+                {tr(language, 'Dalili Zilizoonwa', 'Observed Symptoms')}
+              </label>
               <textarea
                 rows={2}
                 value={symptoms}
@@ -1107,7 +1210,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 htmlFor="qm-mort-pin"
                 className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300"
               >
-                <span>Digital PIN Signature (4-digit PIN)</span>
+                <span>{tr(language, 'Sahihi ya PIN ya Kidijitali (Namba 4)', 'Digital PIN Signature (4-digit PIN)')}</span>
                 <ValidCheck valid={/^\d{4}$/.test(pin)} />
               </label>
               <input
@@ -1115,7 +1218,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 type="password"
                 inputMode="numeric"
                 maxLength={4}
-                placeholder="Enter 4-digit PIN"
+                placeholder={tr(language, 'Weka PIN ya namba 4', 'Enter 4-digit PIN')}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 className={`${INPUT_CLASS} min-h-[44px] font-mono tracking-widest`}
@@ -1135,14 +1238,18 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   pin,
                 });
                 if (!res.ok) {
-                  showValidationError(res.error || 'Unable to submit mortality');
+                  showValidationError(
+                    res.error || tr(language, 'Imeshindwa kutuma taarifa ya vifo', 'Unable to submit mortality')
+                  );
                   return;
                 }
                 setPin('');
                 triggerSuccessAndClose();
               }}
             >
-              {saveSuccess ? 'Mortality Logged' : 'Log Mortality & Alert Technician'}
+              {saveSuccess
+                ? tr(language, 'Vifo Vimerekodiwa', 'Mortality Logged')
+                : tr(language, 'Rekodi Vifo na Mjulishe Mtaalamu', 'Log Mortality & Alert Technician')}
             </Button>
           </div>
         )}
@@ -1163,21 +1270,29 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
           const submitHarvestLot = (openSaleAfter: boolean) => {
             setErrorMsg('');
             if (!harvPond || !selectedPondObj) {
-              showValidationError('Please select a pond to harvest.');
+              showValidationError(tr(language, 'Tafadhali chagua bwawa la kuvuna.', 'Please select a pond to harvest.'));
               return;
             }
             if (totalCount <= 0) {
-              showValidationError('Total harvested fish count must be greater than 0.');
+              showValidationError(
+                tr(language, 'Jumla ya idadi ya samaki waliovunwa lazima iwe zaidi ya 0.', 'Total harvested fish count must be greater than 0.')
+              );
               return;
             }
             if (totalCount > selectedPondObj.currentFish) {
               showValidationError(
-                `Harvest count (${totalCount.toLocaleString()}) exceeds live fish in ${selectedPondObj.code} (${selectedPondObj.currentFish.toLocaleString()}).`
+                tr(
+                  language,
+                  `Idadi ya mavuno (${totalCount.toLocaleString()}) inazidi samaki hai katika ${selectedPondObj.code} (${selectedPondObj.currentFish.toLocaleString()}).`,
+                  `Harvest count (${totalCount.toLocaleString()}) exceeds live fish in ${selectedPondObj.code} (${selectedPondObj.currentFish.toLocaleString()}).`
+                )
               );
               return;
             }
             if (totalKg <= 0) {
-              showValidationError('Total marketable weight (kg) must be greater than 0.');
+              showValidationError(
+                tr(language, 'Jumla ya uzito unaouzika (kg) lazima iwe zaidi ya 0.', 'Total marketable weight (kg) must be greater than 0.')
+              );
               return;
             }
             const res = onRecordHarvest({
@@ -1193,7 +1308,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               pin,
             });
             if (!res.ok) {
-              showValidationError(res.error || 'Harvest failed');
+              showValidationError(res.error || tr(language, 'Mavuno yameshindwa kuhifadhiwa', 'Harvest failed'));
               return;
             }
             setPin('');
@@ -1217,7 +1332,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
             <div className="space-y-3">
               {!perms.canApproveHarvest && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/60 dark:text-amber-200">
-                  Only Farm Manager or Owner can approve harvests. Switch role in the sidebar to approve.
+                  {tr(
+                    language,
+                    'Meneja wa Shamba au Mmiliki pekee anaweza kuidhinisha mavuno. Badilisha wajibu kwenye menyu ya pembeni.',
+                    'Only Farm Manager or Owner can approve harvests. Switch role in the sidebar to approve.'
+                  )}
                 </div>
               )}
 
@@ -1226,7 +1345,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   htmlFor="qm-harv-pond"
                   className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  <span>Pond to Harvest *</span>
+                  <span>{tr(language, 'Bwawa la Kuvuna *', 'Pond to Harvest *')}</span>
                   <ValidCheck valid={Boolean(selectedPondObj)} />
                 </label>
                 <select
@@ -1235,12 +1354,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   onChange={(e) => setHarvPond(e.target.value)}
                   className={`${INPUT_CLASS} min-h-[44px] font-semibold`}
                 >
-                  <option value="">Select pond...</option>
+                  <option value="">{tr(language, 'Chagua bwawa...', 'Select pond...')}</option>
                   {state.ponds
                     .filter((p) => p.currentFish > 0)
                     .map((p) => (
                       <option key={p.id} value={p.code}>
-                        {p.code} ({p.species} — {p.currentFish.toLocaleString()} live fish)
+                        {p.code} ({p.species} — {p.currentFish.toLocaleString()} {tr(language, 'samaki hai', 'live fish')})
                       </option>
                     ))}
                 </select>
@@ -1248,9 +1367,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
 
               <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-3 dark:border-slate-800 dark:bg-slate-800/60">
                 <div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Large Grade</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    {tr(language, 'Daraja Kubwa', 'Large Grade')}
+                  </span>
                   <label htmlFor="qm-harv-lc" className="mt-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Fish Count
+                    {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                   </label>
                   <input
                     id="qm-harv-lc"
@@ -1263,7 +1384,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     className={`${INPUT_CLASS} min-h-[44px] px-3 tabular-nums`}
                   />
                   <label htmlFor="qm-harv-lkg" className="mt-2 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Weight (kg)
+                    {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                   </label>
                   <input
                     id="qm-harv-lkg"
@@ -1278,9 +1399,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Medium Grade</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    {tr(language, 'Daraja la Kati', 'Medium Grade')}
+                  </span>
                   <label htmlFor="qm-harv-mc" className="mt-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Fish Count
+                    {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                   </label>
                   <input
                     id="qm-harv-mc"
@@ -1293,7 +1416,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     className={`${INPUT_CLASS} min-h-[44px] px-3 tabular-nums`}
                   />
                   <label htmlFor="qm-harv-mkg" className="mt-2 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Weight (kg)
+                    {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                   </label>
                   <input
                     id="qm-harv-mkg"
@@ -1308,9 +1431,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Small Grade</span>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    {tr(language, 'Daraja Ndogo', 'Small Grade')}
+                  </span>
                   <label htmlFor="qm-harv-sc" className="mt-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Fish Count
+                    {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                   </label>
                   <input
                     id="qm-harv-sc"
@@ -1323,7 +1448,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     className={`${INPUT_CLASS} min-h-[44px] px-3 tabular-nums`}
                   />
                   <label htmlFor="qm-harv-skg" className="mt-2 block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                    Weight (kg)
+                    {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                   </label>
                   <input
                     id="qm-harv-skg"
@@ -1342,7 +1467,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="qm-harv-dmg" className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Damaged / Reject (kg)
+                    {tr(language, 'Walioharibika / Kukataa (kg)', 'Damaged / Reject (kg)')}
                   </label>
                   <input
                     id="qm-harv-dmg"
@@ -1357,7 +1482,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 </div>
                 <div>
                   <label htmlFor="qm-harv-notes" className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    Harvest Notes
+                    {tr(language, 'Maelezo ya Mavuno', 'Harvest Notes')}
                   </label>
                   <input
                     id="qm-harv-notes"
@@ -1370,12 +1495,16 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
               </div>
 
               <div className="rounded-xl bg-emerald-50 p-2.5 text-xs text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
-                Total Lot Stock: <strong className="tabular-nums">{totalCount.toLocaleString()} fish</strong> ·{' '}
-                <strong className="tabular-nums">{totalKg.toFixed(2)} kg</strong> marketable
+                {tr(language, 'Jumla ya Akiba ya Fungu', 'Total Lot Stock')}:{' '}
+                <strong className="tabular-nums">
+                  {totalCount.toLocaleString()} {tr(language, 'samaki', 'fish')}
+                </strong>{' '}
+                · <strong className="tabular-nums">{totalKg.toFixed(2)} kg</strong>{' '}
+                {tr(language, 'zinazouzika', 'marketable')}
                 {selectedPondObj && (
                   <span className="ml-1 text-emerald-700 dark:text-emerald-300">
-                    (Remaining in {selectedPondObj.code}:{' '}
-                    {Math.max(0, selectedPondObj.currentFish - totalCount).toLocaleString()} fish)
+                    ({tr(language, 'Wanaobaki katika', 'Remaining in')} {selectedPondObj.code}:{' '}
+                    {Math.max(0, selectedPondObj.currentFish - totalCount).toLocaleString()} {tr(language, 'samaki', 'fish')})
                   </span>
                 )}
               </div>
@@ -1385,7 +1514,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   htmlFor="qm-harv-pin"
                   className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300"
                 >
-                  <span>Manager Approval PIN (4 digits) *</span>
+                  <span>{tr(language, 'PIN ya Uidhinishaji wa Meneja (namba 4) *', 'Manager Approval PIN (4 digits) *')}</span>
                   <ValidCheck valid={/^\d{4}$/.test(pin)} />
                 </label>
                 <input
@@ -1393,7 +1522,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
-                  placeholder="Enter 4-digit PIN"
+                  placeholder={tr(language, 'Weka PIN ya namba 4', 'Enter 4-digit PIN')}
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   className={`${INPUT_CLASS} min-h-[44px] font-mono tracking-widest`}
@@ -1408,7 +1537,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   disabled={!perms.canApproveHarvest}
                   onClick={() => submitHarvestLot(false)}
                 >
-                  Save Harvest Lot
+                  {tr(language, 'Hifadhi Fungu la Mavuno', 'Save Harvest Lot')}
                 </Button>
                 <Button
                   variant="success"
@@ -1417,7 +1546,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   disabled={!perms.canApproveHarvest}
                   onClick={() => submitHarvestLot(true)}
                 >
-                  Save Lot & Start Quick Sale
+                  {tr(language, 'Hifadhi Fungu na Anza Uza Haraka', 'Save Lot & Start Quick Sale')}
                 </Button>
               </div>
             </div>
@@ -1428,7 +1557,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
         {renderedModal === 'report' && (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Download audit-ready CSV exports formatted for Tanzania Fisheries (Aquaculture) Regulations 2024 & FiRCIS traceability compliance.
+              {tr(
+                language,
+                'Pakua ripoti za CSV zilizo tayari kwa ukaguzi kulingana na Kanuni za Uvuvi (Ufugaji Samaki) Tanzania 2024 & FiRCIS.',
+                'Download audit-ready CSV exports formatted for Tanzania Fisheries (Aquaculture) Regulations 2024 & FiRCIS compliance.'
+              )}
             </p>
             <div className="grid grid-cols-1 gap-2">
               <button
@@ -1436,7 +1569,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 onClick={() =>
                   exportToCsv(
                     `dukaaqusmart-batches-${todayIso()}.csv`,
-                    ['Batch Code', 'Species', 'Pond', 'Stocked', 'Estimated Live', 'Avg Weight (g)', 'Feed (kg)', 'Mortality'],
+                    language === 'sw'
+                      ? ['Msimbo wa Kundi', 'Aina', 'Bwawa', 'Idadi ya Awali', 'Kadirio Hai', 'Uzito Wastani (g)', 'Chakula (kg)', 'Vifo']
+                      : ['Batch Code', 'Species', 'Pond', 'Stocked', 'Estimated Live', 'Avg Weight (g)', 'Feed (kg)', 'Mortality'],
                     state.batches.map((b) => [
                       b.batchCode,
                       b.species,
@@ -1452,8 +1587,12 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/70"
               >
                 <div>
-                  <div className="text-xs font-bold text-slate-900 dark:text-white">Batch Production & Traceability Report</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">All active batches, biomass, mortality & FCR</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    {tr(language, 'Ripoti ya Uzalishaji na Ufuatiliaji wa Makundi', 'Batch Production & Traceability Report')}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {tr(language, 'Makundi yote hai, uzito wa jumla, vifo na FCR', 'All active batches, biomass, mortality & FCR')}
+                  </div>
                 </div>
                 <FileDown className="h-4 w-4 text-blue-600 dark:text-sky-400" />
               </button>
@@ -1462,7 +1601,9 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 onClick={() =>
                   exportToCsv(
                     `dukaaqusmart-feed-audit-${todayIso()}.csv`,
-                    ['Date', 'Pond', 'Batch', 'Approved kg', 'Issued kg', 'Fed kg', 'Variance kg', 'Status'],
+                    language === 'sw'
+                      ? ['Tarehe', 'Bwawa', 'Kundi', 'Iliyoidhinishwa kg', 'Iliyotolewa kg', 'Iliyolishwa kg', 'Tofauti kg', 'Hali']
+                      : ['Date', 'Pond', 'Batch', 'Approved kg', 'Issued kg', 'Fed kg', 'Variance kg', 'Status'],
                     state.feedIssuances.map((f) => [
                       f.date,
                       f.pondCode,
@@ -1471,15 +1612,19 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                       f.issuedByStorekeeperKg,
                       f.actualFedKg ?? 0,
                       f.varianceKg,
-                      f.status,
+                      tDomain(language, f.status),
                     ])
                   )
                 }
                 className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/70"
               >
                 <div>
-                  <div className="text-xs font-bold text-slate-900 dark:text-white">Feed Issuance & Variance Audit</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Storekeeper vs Keeper reconciliation logs</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    {tr(language, 'Ukaguzi wa Utoaji wa Chakula na Tofauti', 'Feed Issuance & Variance Audit')}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {tr(language, 'Uhakiki wa Mtunza Bohari dhidi ya Msimamizi', 'Storekeeper vs Keeper reconciliation logs')}
+                  </div>
                 </div>
                 <FileDown className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </button>
@@ -1488,23 +1633,29 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 onClick={() =>
                   exportToCsv(
                     `dukaaqusmart-finance-tzs-${todayIso()}.csv`,
-                    ['Date', 'Type', 'Category', 'Description', 'Amount (TZS)', 'Counterparty', 'Status'],
+                    language === 'sw'
+                      ? ['Tarehe', 'Aina', 'Kipengele', 'Maelezo', 'Kiasi (TZS)', 'Mhusika', 'Hali']
+                      : ['Date', 'Type', 'Category', 'Description', 'Amount (TZS)', 'Counterparty', 'Status'],
                     state.finances.map((t) => [
                       t.date,
-                      t.type,
-                      t.category,
+                      tDomain(language, t.type),
+                      tDomain(language, t.category),
                       t.description,
                       t.amountTzs,
                       t.counterparty,
-                      t.paymentStatus,
+                      tDomain(language, t.paymentStatus),
                     ])
                   )
                 }
                 className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/70"
               >
                 <div>
-                  <div className="text-xs font-bold text-slate-900 dark:text-white">TZS Financial & Profitability Ledger</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Revenue, feed expenses, salaries, debts</div>
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">
+                    {tr(language, 'Daftari la Fedha (TZS) na Faida', 'TZS Financial & Profitability Ledger')}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {tr(language, 'Mapato, gharama za chakula, mishahara na madeni', 'Revenue, feed expenses, salaries, debts')}
+                  </div>
                 </div>
                 <FileDown className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </button>
@@ -1524,6 +1675,7 @@ interface PondQrModalProps {
 }
 
 export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, onQuickAction }) => {
+  const { language } = useLanguage();
   const [renderedPond, setRenderedPond] = useState<Pond | null>(pond);
   useEffect(() => {
     if (pond) setRenderedPond(pond);
@@ -1557,7 +1709,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
           <span className="flex items-center gap-2">
             <QrCode className="h-4 w-4 text-blue-600 dark:text-sky-400" />
             <span>
-              {activePond.name} ({activePond.code}) Digital Twin & QR Profile
+              {activePond.name} ({activePond.code}) {tr(language, 'Wasifu wa QR na Pacha wa Kidijitali', 'Digital Twin & QR Profile')}
             </span>
           </span>
         )
@@ -1579,14 +1731,15 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 {activePond.qrCodeToken}
               </div>
               <div className="mt-0.5 font-bold text-slate-900 dark:text-white">
-                {activePond.species} · {activePond.unitType}
+                {activePond.species} · {tDomain(language, activePond.unitType)}
               </div>
               <div className="text-slate-600 dark:text-slate-300">
-                Stock: <strong className="tabular-nums">{activePond.currentFish.toLocaleString()}</strong> /{' '}
+                {tr(language, 'Akiba', 'Stock')}: <strong className="tabular-nums">{activePond.currentFish.toLocaleString()}</strong> /{' '}
                 {activePond.maxCapacity.toLocaleString()}
               </div>
               <div className="text-slate-500 dark:text-slate-400">
-                {farm?.region || 'Farm'} · Keeper: {keeper?.name || 'Assigned'}
+                {farm?.region || tr(language, 'Shamba', 'Farm')} · {tr(language, 'Msimamizi', 'Keeper')}:{' '}
+                {keeper?.name || tr(language, 'Aliyepangiwa', 'Assigned')}
               </div>
             </div>
           </div>
@@ -1595,34 +1748,36 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
           <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs dark:border-sky-900/60 dark:bg-sky-950/30">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="font-bold text-slate-900 dark:text-white">
-                Digital Geographical Identity
+                {tr(language, 'Utambulisho wa Kijiografia wa Kidijitali', 'Digital Geographical Identity')}
               </span>
               <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                {activePond.boundaryVerified ? 'Boundary Verified' : 'Pending Verification'}
+                {activePond.boundaryVerified
+                  ? tr(language, 'Mpaka Umethibitishwa', 'Boundary Verified')
+                  : tr(language, 'Inasubiri Uthibitisho', 'Pending Verification')}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700 tabular-nums dark:text-slate-300">
               <div>
-                Surface Area:{' '}
+                {tr(language, 'Eneo la Juu', 'Surface Area')}:{' '}
                 <strong>
                   {activePond.areaSqm ? `${activePond.areaSqm.toLocaleString()} m²` : activePond.dimensions}
                 </strong>
               </div>
               <div>
-                Perimeter:{' '}
+                {tr(language, 'Mzingo', 'Perimeter')}:{' '}
                 <strong>{activePond.perimeterM ? `${activePond.perimeterM.toLocaleString()} m` : '—'}</strong>
               </div>
               <div>
-                Center GPS:{' '}
+                {tr(language, 'Kituo cha GPS', 'Center GPS')}:{' '}
                 <strong className="font-mono">
                   {activePond.gps[0].toFixed(5)}, {activePond.gps[1].toFixed(5)}
                 </strong>
               </div>
               <div>
-                Corners / Method:{' '}
+                {tr(language, 'Pembe / Mbinu', 'Corners / Method')}:{' '}
                 <strong>
-                  {activePond.boundaryPointsCount || activePond.polygon?.length || 0} pts ·{' '}
-                  {activePond.mappingMethod || 'Registry Seed'}
+                  {activePond.boundaryPointsCount || activePond.polygon?.length || 0} {tr(language, 'alama', 'pts')} ·{' '}
+                  {tDomain(language, activePond.mappingMethod || 'Registry Seed')}
                 </strong>
               </div>
             </div>
@@ -1631,7 +1786,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
           {/* Infrastructure Relationships */}
           <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
             <div className="mb-1.5 font-bold text-slate-900 dark:text-white">
-              Infrastructure Relationships ({linkedInfra.length})
+              {tr(language, 'Miundombinu Iliyounganishwa', 'Infrastructure Relationships')} ({linkedInfra.length})
             </div>
             {linkedInfra.length > 0 ? (
               <div className="grid grid-cols-2 gap-1.5 text-[11px]">
@@ -1641,17 +1796,21 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                     className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800/70"
                   >
                     <span className="truncate font-medium text-slate-800 dark:text-slate-200">
-                      {inf.type}
+                      {tDomain(language, inf.type)}
                     </span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      Mapped
+                      {tr(language, 'Imepimwa', 'Mapped')}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                No individual inlets, outlets, or aerator markers pinned to {activePond.code} yet. Use Farm Digital Twin map to pin assets.
+                {tr(
+                  language,
+                  `Hakuna alama za kuingiza/kutoa maji au kipulizia hewa zilizowekwa kwa ${activePond.code} bado. Tumia ramani ya shamba kuweka alama.`,
+                  `No individual inlets, outlets, or aerator markers pinned to ${activePond.code} yet. Use Farm Digital Twin map to pin assets.`
+                )}
               </div>
             )}
           </div>
@@ -1659,13 +1818,17 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
           {batch && (
             <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
               <div className="mb-1 flex items-center justify-between">
-                <span className="font-bold text-slate-900 dark:text-white">Active Batch: {batch.batchCode}</span>
-                <span className="font-semibold text-emerald-700 dark:text-emerald-400">{batch.status}</span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {tr(language, 'Kundi Hai', 'Active Batch')}: {batch.batchCode}
+                </span>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                  {tDomain(language, batch.status)}
+                </span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-slate-600 dark:text-slate-300">
-                <div>Avg Wt: <strong>{batch.currentAvgWeightG}g</strong></div>
-                <div>Biomass: <strong>{Math.round((batch.currentEstimatedFish * batch.currentAvgWeightG) / 1000)} kg</strong></div>
-                <div>Harvest: <strong>{batch.plannedHarvestDate}</strong></div>
+                <div>{tr(language, 'Uzito Wastani', 'Avg Wt')}: <strong>{batch.currentAvgWeightG}g</strong></div>
+                <div>{tr(language, 'Uzito Hai', 'Biomass')}: <strong>{Math.round((batch.currentEstimatedFish * batch.currentAvgWeightG) / 1000)} kg</strong></div>
+                <div>{tr(language, 'Mavuno', 'Harvest')}: <strong>{batch.plannedHarvestDate}</strong></div>
               </div>
             </div>
           )}
@@ -1681,7 +1844,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 <div className="font-bold text-slate-900 tabular-nums dark:text-white">{wq.dissolvedOxygen} mg/L</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/80">
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">Temp</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">{tr(language, 'Joto', 'Temp')}</div>
                 <div className="font-bold text-slate-900 tabular-nums dark:text-white">{wq.temperature}°C</div>
               </div>
               <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/80">
@@ -1700,7 +1863,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 onQuickAction('feeding');
               }}
             >
-              Record Feeding
+              {tr(language, 'Rekodi Ulishaji', 'Record Feeding')}
             </Button>
             <Button
               variant="secondary"
@@ -1710,7 +1873,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 onQuickAction('water');
               }}
             >
-              Log Water Reading
+              {tr(language, 'Rekodi Ubora wa Maji', 'Log Water Reading')}
             </Button>
           </div>
         </div>

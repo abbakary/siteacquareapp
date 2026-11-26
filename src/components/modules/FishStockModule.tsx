@@ -17,7 +17,7 @@ import {
   Waves,
 } from 'lucide-react';
 import { AquacultureState, Language } from '../../types/aquaculture';
-import { TRANSLATIONS } from '../../i18n/translations';
+import { tDomain, tr, TRANSLATIONS } from '../../i18n/translations';
 import { formatNumber, formatTzs, todayIso } from '../../utils/formatters';
 import { getPermissions } from '../../utils/rbac';
 import { getLotTotalRemainingKg, roundKg } from '../../utils/sales';
@@ -34,6 +34,13 @@ import {
   ValidCheck,
   listItem,
 } from '../../ui';
+
+const renderGradeLabel = (grade: 'Large' | 'Medium' | 'Small', language: Language) => {
+  if (language !== 'sw') return grade;
+  if (grade === 'Large') return 'Kubwa';
+  if (grade === 'Medium') return 'Saizi ya Kati';
+  return 'Ndogo';
+};
 
 export interface ManualStockLotPayload {
   pondCode: string; // 'EXTERNAL' or pond code e.g. 'POND-001'
@@ -215,7 +222,10 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
         pondCode: b.pondCode,
         species: b.species,
         ref: b.batchCode,
-        detail: `Stocked ${formatNumber(b.initialStocking)} fish (${b.avgInitialWeightG}g avg) from ${b.sourceHatchery}`,
+        detail:
+          language === 'sw'
+            ? `Wamepandikizwa samaki ${formatNumber(b.initialStocking)} (wastani ${b.avgInitialWeightG}g) kutoka ${b.sourceHatchery}`
+            : `Stocked ${formatNumber(b.initialStocking)} fish (${b.avgInitialWeightG}g avg) from ${b.sourceHatchery}`,
         kgDelta: `+${roundKg((b.initialStocking * b.avgInitialWeightG) / 1000).toFixed(1)} kg`,
         actor: b.responsibleKeeper,
       });
@@ -233,7 +243,10 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
         pondCode: l.pondCode,
         species: l.species,
         ref: l.lotCode,
-        detail: `${l.source === 'Manual Stock' ? 'Manual graded stock' : 'Graded harvest lot'} · Rem: ${getLotTotalRemainingKg(l).toFixed(1)} kg`,
+        detail:
+          language === 'sw'
+            ? `${l.source === 'Manual Stock' ? 'Akiba iliyopangwa kwa mkono' : 'Fungu la mavuno lililopangwa'} · Iliyobaki: ${getLotTotalRemainingKg(l).toFixed(1)} kg`
+            : `${l.source === 'Manual Stock' ? 'Manual graded stock' : 'Graded harvest lot'} · Rem: ${getLotTotalRemainingKg(l).toFixed(1)} kg`,
         kgDelta: `+${totalKg.toFixed(1)} kg`,
         actor: l.approvedBy,
       });
@@ -248,16 +261,29 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
         date: s.date,
         kind: 'Sale Out',
         pondCode: ponds || 'MULTI',
-        species: species || 'Mixed',
+        species: species || tr(language, 'Mchanganyiko', 'Mixed'),
         ref: s.invoiceNo,
-        detail: `Sold to ${s.customerName} (${formatTzs(s.totalTzs)})`,
+        detail:
+          language === 'sw'
+            ? `Imeuzwa kwa ${s.customerName} (${formatTzs(s.totalTzs)})`
+            : `Sold to ${s.customerName} (${formatTzs(s.totalTzs)})`,
         kgDelta: `-${totalKg.toFixed(1)} kg`,
         actor: s.createdBy,
       });
     });
 
     return entries.sort((a, b) => b.date.localeCompare(a.date));
-  }, [state.batches, state.harvestLots, state.sales]);
+  }, [state.batches, state.harvestLots, state.sales, language]);
+
+  const renderMovementKind = (
+    kind: 'Stock In' | 'Harvest to Stock' | 'Manual Stock Lot' | 'Sale Out'
+  ) => {
+    if (language !== 'sw') return kind;
+    if (kind === 'Stock In') return 'Kuingiza Akiba';
+    if (kind === 'Harvest to Stock') return 'Mavuno Kwenye Akiba';
+    if (kind === 'Manual Stock Lot') return 'Fungu la Mkono';
+    return 'Mauzo Yaliyotoka';
+  };
 
   // KPIs
   const totalLiveFish = state.ponds.reduce((sum, p) => sum + p.currentFish, 0);
@@ -323,7 +349,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
       pin,
     });
     if (!res.ok) {
-      failManual(res.error || 'Could not create stock lot.');
+      failManual(res.error || tr(language, 'Imeshindwa kutengeneza fungu la akiba.', 'Could not create stock lot.'));
       return;
     }
     setManualOpen(false);
@@ -334,15 +360,15 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
     const count = Math.round(Number(pondFishCount) || 0);
     const avgG = Number(pondAvgWeightG) || 0;
     if (!pondStockCode) {
-      failManual('Select a pond first.');
+      failManual(tr(language, 'Chagua bwawa kwanza.', 'Select a pond first.'));
       return;
     }
     if (count <= 0) {
-      failManual('Enter fish count greater than 0.');
+      failManual(tr(language, 'Weka idadi ya samaki zaidi ya 0.', 'Enter fish count greater than 0.'));
       return;
     }
     if (avgG <= 0) {
-      failManual('Enter average weight (grams) greater than 0.');
+      failManual(tr(language, 'Weka uzito wa wastani (gramu) zaidi ya 0.', 'Enter average weight (grams) greater than 0.'));
       return;
     }
     const res = onRegisterPondStock({
@@ -350,12 +376,13 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
       species: pondStockSpecies,
       fishCount: count,
       avgWeightG: avgG,
-      sourceHatchery: pondHatchery.trim() || 'Farm Hatchery / Manual Entry',
-      supplier: pondSupplier.trim() || 'Direct Stocking',
+      sourceHatchery:
+        pondHatchery.trim() || tr(language, 'Kitalu cha Shamba / Ingizo la Mkono', 'Farm Hatchery / Manual Entry'),
+      supplier: pondSupplier.trim() || tr(language, 'Upandikizaji wa Moja kwa Moja', 'Direct Stocking'),
       notes: pondNotes.trim(),
     });
     if (!res.ok) {
-      failManual(res.error || 'Could not register pond fish stock.');
+      failManual(res.error || tr(language, 'Imeshindwa kusajili akiba ya samaki kwenye bwawa.', 'Could not register pond fish stock.'));
       return;
     }
     setManualOpen(false);
@@ -377,17 +404,21 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
           </Button>
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Fish Stock &amp; Live Biomass Center
+              {tr(language, 'Kituo cha Akiba ya Samaki na Uzito Hai', 'Fish Stock & Live Biomass Center')}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Live stock automatically synced by pond &amp; species, plus manual stock lots. Every harvest and sale tracks directly from this stock.
+              {tr(
+                language,
+                'Akiba ya samaki hai husawazishwa kiotomatiki kwa bwawa na aina, pamoja na mafungu ya mkono. Kila uvunaji na mauzo hufuatiliwa moja kwa moja hapa.',
+                'Live stock automatically synced by pond & species, plus manual stock lots. Every harvest and sale tracks directly from this stock.'
+              )}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" size="md" onClick={() => openManualModal('lot')}>
-            <Plus className="h-4 w-4" /> Manual Stock Entry
+            <Plus className="h-4 w-4" /> {tr(language, 'Ingiza Akiba ya Mkono', 'Manual Stock Entry')}
           </Button>
           <Button variant="success" size="md" onClick={() => onQuickSalePond(state.ponds.find((p) => p.currentFish > 0)?.code || 'POND-001')}>
             <ShoppingBag className="h-4 w-4" /> {t.sales.quickSaleBtn}
@@ -399,53 +430,57 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card hoverable>
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Live Fish in Ponds</span>
+            <span>{tr(language, 'Samaki Hai Kwenye Mabwawa', 'Live Fish in Ponds')}</span>
             <Fish className="h-4 w-4 text-blue-600 dark:text-sky-400" />
           </div>
           <div className="mt-1 font-display text-xl font-extrabold text-slate-900 tabular-nums dark:text-white">
             <CountUpNumber value={totalLiveFish} formatter={formatNumber} />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Across {activePondCount} active pond(s)
+            {tr(language, `Kwenye mabwawa ${activePondCount} yanayotumika`, `Across ${activePondCount} active pond(s)`)}
           </div>
         </Card>
 
         <Card hoverable>
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Live Pond Biomass</span>
+            <span>{tr(language, 'Uzito Hai Kwenye Mabwawa', 'Live Pond Biomass')}</span>
             <Waves className="h-4 w-4 text-teal-600 dark:text-teal-400" />
           </div>
           <div className="mt-1 font-display text-xl font-extrabold text-teal-700 tabular-nums dark:text-teal-400">
             <CountUpNumber value={totalLiveBiomassKg} decimals={1} suffix=" kg" />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Available for Harvest or Direct Sale
+            {tr(language, 'Tayari kwa Kuvunwa au Kuuzwa Moja kwa Moja', 'Available for Harvest or Direct Sale')}
           </div>
         </Card>
 
         <Card hoverable>
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Graded Chilled Stock (In Stock)</span>
+            <span>{tr(language, 'Akiba ya Baridi Iliyopangwa', 'Graded Chilled Stock (In Stock)')}</span>
             <Boxes className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="mt-1 font-display text-xl font-extrabold text-emerald-700 tabular-nums dark:text-emerald-400">
             <CountUpNumber value={totalChilledStockKg} decimals={1} suffix=" kg" />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            {activeLotsCount} active lot(s) ready to sell
+            {tr(language, `Mafungu ${activeLotsCount} tayari kuuzwa`, `${activeLotsCount} active lot(s) ready to sell`)}
           </div>
         </Card>
 
         <Card hoverable>
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Total Tracked Fish Stock</span>
+            <span>{tr(language, 'Jumla ya Akiba Iliyofuatiliwa', 'Total Tracked Fish Stock')}</span>
             <Layers className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="mt-1 font-display text-xl font-extrabold text-slate-900 tabular-nums dark:text-white">
             <CountUpNumber value={totalTrackedStockKg} decimals={1} suffix=" kg" />
           </div>
           <div className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            {state.sales.length} sale(s) &amp; {state.harvestLots.length} lot(s) linked
+            {tr(
+              language,
+              `Mauzo ${state.sales.length} na mafungu ${state.harvestLots.length} yameunganishwa`,
+              `${state.sales.length} sale(s) & ${state.harvestLots.length} lot(s) linked`
+            )}
           </div>
         </Card>
       </div>
@@ -459,17 +494,17 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
           tabs={[
             {
               id: 'ponds',
-              label: `Pond Stock by Species (${filteredPondRows.length})`,
+              label: `${tr(language, 'Akiba ya Mabwawa kwa Aina', 'Pond Stock by Species')} (${filteredPondRows.length})`,
               icon: <Sprout className="h-3.5 w-3.5" />,
             },
             {
               id: 'lots',
-              label: `Graded Stock Lots (${filteredLots.length})`,
+              label: `${tr(language, 'Mafungu Yaliyopangwa', 'Graded Stock Lots')} (${filteredLots.length})`,
               icon: <Package className="h-3.5 w-3.5" />,
             },
             {
               id: 'ledger',
-              label: `Stock Movement Ledger (${stockLedger.length})`,
+              label: `${tr(language, 'Daftari la Mwenendo wa Akiba', 'Stock Movement Ledger')} (${stockLedger.length})`,
               icon: <Layers className="h-3.5 w-3.5" />,
             },
           ]}
@@ -482,17 +517,17 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search pond, species, batch, lot..."
+              placeholder={tr(language, 'Tafuta bwawa, aina, kundi, fungu...', 'Search pond, species, batch, lot...')}
               className={`${INPUT_CLASS} pl-9`}
             />
           </div>
           <select
             value={speciesFilter}
             onChange={(e) => setSpeciesFilter(e.target.value)}
-            aria-label="Filter stock by species"
+            aria-label={tr(language, 'Chuja akiba kwa aina ya samaki', 'Filter stock by species')}
             className={`${INPUT_CLASS} min-w-[170px] sm:w-auto`}
           >
-            <option value="all">All Species</option>
+            <option value="all">{tr(language, 'Aina Zote za Samaki', 'All Species')}</option>
             {state.speciesCatalogue.map((s) => (
               <option key={s.id} value={s.commonName}>
                 {s.commonName}
@@ -526,12 +561,15 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                           {pond.name}
                         </span>
                         <Badge variant={pond.currentFish > 0 ? 'success' : 'neutral'}>
-                          {pond.status}
+                          {tDomain(language, pond.status)}
                         </Badge>
                       </div>
                       <div className="mt-0.5 text-slate-600 dark:text-slate-300">
-                        Species: <strong>{pond.species}</strong> · {pond.unitType} · Batch:{' '}
-                        <span className="font-mono font-semibold">{batch?.batchCode || 'Unstocked'}</span>
+                        {tr(language, 'Aina', 'Species')}: <strong>{pond.species}</strong> · {tDomain(language, pond.unitType)} ·{' '}
+                        {tr(language, 'Kundi', 'Batch')}:{' '}
+                        <span className="font-mono font-semibold">
+                          {batch?.batchCode || tr(language, 'Halijapandikizwa', 'Unstocked')}
+                        </span>
                       </div>
                     </div>
 
@@ -540,7 +578,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                         {estBiomassKg.toFixed(1)} kg
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Est. Live Biomass
+                        {tr(language, 'Kadirio la Uzito Hai', 'Est. Live Biomass')}
                       </div>
                     </div>
                   </div>
@@ -548,36 +586,44 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   {/* Stock Breakdown Metrics */}
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Live Fish</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {tr(language, 'Samaki Hai', 'Live Fish')}
+                      </div>
                       <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                         {formatNumber(pond.currentFish)}
                       </div>
                       <div className="text-[10px] text-slate-500 tabular-nums">
-                        Avg {avgWeightG} g
+                        {tr(language, 'Wastani', 'Avg')} {avgWeightG} g
                       </div>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Chilled Stock</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {tr(language, 'Akiba ya Baridi', 'Chilled Stock')}
+                      </div>
                       <div className="font-bold text-blue-700 tabular-nums dark:text-sky-400">
                         {chilledRemainingKg.toFixed(1)} kg
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        {row.lotCount} lot(s)
+                        {tr(language, `Mafungu ${row.lotCount}`, `${row.lotCount} lot(s)`)}
                       </div>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Sold Total</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {tr(language, 'Jumla Iliyouzwa', 'Sold Total')}
+                      </div>
                       <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                         {soldKgFromPond.toFixed(1)} kg
                       </div>
-                      <div className="text-[10px] text-slate-500">Tracked out</div>
+                      <div className="text-[10px] text-slate-500">
+                        {tr(language, 'Imefuatiliwa', 'Tracked out')}
+                      </div>
                     </div>
                   </div>
 
                   {/* Pond Capacity Bar */}
                   <div>
                     <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                      <span>Pond Stocking Capacity</span>
+                      <span>{tr(language, 'Uwezo wa Bwawa Kuweka Samaki', 'Pond Stocking Capacity')}</span>
                       <span className="font-bold tabular-nums">
                         {formatNumber(pond.currentFish)} / {formatNumber(pond.maxCapacity)} ({fillPct}%)
                       </span>
@@ -605,14 +651,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                           size="sm"
                           onClick={() => onHarvestPond(pond.code)}
                         >
-                          <Scale className="h-3.5 w-3.5" /> Harvest to Stock
+                          <Scale className="h-3.5 w-3.5" /> {tr(language, 'Vuna Kwenye Akiba', 'Harvest to Stock')}
                         </Button>
                         <Button
                           variant="success"
                           size="sm"
                           onClick={() => onQuickSalePond(pond.code)}
                         >
-                          Sell from Pond <ArrowRight className="h-3.5 w-3.5" />
+                          {tr(language, 'Uza Kutoka Bwawa', 'Sell from Pond')} <ArrowRight className="h-3.5 w-3.5" />
                         </Button>
                       </>
                     ) : (
@@ -626,7 +672,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                           setPondStockSpecies(pond.species);
                         }}
                       >
-                        <Plus className="h-3.5 w-3.5" /> Stock Fingerlings / Fish Manually
+                        <Plus className="h-3.5 w-3.5" /> {tr(language, 'Pandikiza Vifaranga / Samaki kwa Mkono', 'Stock Fingerlings / Fish Manually')}
                       </Button>
                     )}
                   </div>
@@ -643,11 +689,15 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
           {filteredLots.length === 0 ? (
             <EmptyState
               icon={<Package className="h-6 w-6" />}
-              title="No graded fish stock lots found"
-              description="Harvest from an active pond or create a manual stock lot to make graded fish ready for sale."
+              title={tr(language, 'Hakuna mafungu ya akiba ya samaki yaliyopatikana', 'No graded fish stock lots found')}
+              description={tr(
+                language,
+                'Vuna kutoka bwawa lenye samaki au tengeneza fungu la akiba kwa mkono ili samaki wawe tayari kuuzwa.',
+                'Harvest from an active pond or create a manual stock lot to make graded fish ready for sale.'
+              )}
               action={
                 <Button variant="primary" onClick={() => openManualModal('lot')}>
-                  <Plus className="h-4 w-4" /> Create Manual Stock Lot
+                  <Plus className="h-4 w-4" /> {tr(language, 'Tengeneza Fungu la Akiba', 'Create Manual Stock Lot')}
                 </Button>
               }
             />
@@ -676,32 +726,41 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                             <span className="font-bold text-slate-900 dark:text-white">
                               {lot.pondCode} · {lot.species}
                             </span>
-                            <Badge variant="info">{lot.source || 'Harvest'}</Badge>
+                            <Badge variant="info">{tDomain(language, lot.source || 'Harvest')}</Badge>
                           </div>
                           <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                            Date: {lot.date} · Batch: {lot.batchCode} · Approved: {lot.approvedBy}
+                            {tr(language, 'Tarehe', 'Date')}: {lot.date} · {tr(language, 'Kundi', 'Batch')}: {lot.batchCode} ·{' '}
+                            {tr(language, 'Imeidhinishwa', 'Approved')}: {lot.approvedBy}
                           </div>
                         </div>
                         <Badge variant={remTotal > 0 ? 'success' : 'neutral'}>
-                          {remTotal > 0 ? `${remTotal.toFixed(1)} kg in stock` : 'Sold Out'}
+                          {remTotal > 0
+                            ? `${remTotal.toFixed(1)} kg ${tr(language, 'bohari', 'in stock')}`
+                            : tr(language, 'Imeisha', 'Sold Out')}
                         </Badge>
                       </div>
 
                       <div className="mt-3 grid grid-cols-3 gap-2">
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Large</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Large', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.large.toFixed(1)} / {lot.grades.largeKg} kg
                           </div>
                         </div>
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Medium</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Medium', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.medium.toFixed(1)} / {lot.grades.mediumKg} kg
                           </div>
                         </div>
                         <div className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/70">
-                          <div className="text-slate-500 dark:text-slate-400">Small</div>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {renderGradeLabel('Small', language)}
+                          </div>
                           <div className="font-bold text-slate-900 tabular-nums dark:text-white">
                             {lot.remainingKg.small.toFixed(1)} / {lot.grades.smallKg} kg
                           </div>
@@ -710,7 +769,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
 
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Initial lot weight: {origTotal.toFixed(1)} kg
+                          {tr(language, 'Uzito wa awali wa fungu', 'Initial lot weight')}: {origTotal.toFixed(1)} kg
                           {lot.notes ? ` · ${lot.notes}` : ''}
                         </span>
                         {remTotal > 0 && (
@@ -719,7 +778,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                             size="sm"
                             onClick={() => onQuickSaleLot(lot.id)}
                           >
-                            Sell from Stock <ArrowRight className="h-3.5 w-3.5" />
+                            {tr(language, 'Uza Kutoka Akiba', 'Sell from Stock')} <ArrowRight className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </div>
@@ -738,10 +797,18 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Fish Stock Traceability Ledger (Pond Stock → Harvest → Sales)
+                {tr(
+                  language,
+                  'Daftari la Ufuatiliaji wa Akiba ya Samaki (Bwawa → Mavuno → Mauzo)',
+                  'Fish Stock Traceability Ledger (Pond Stock → Harvest → Sales)'
+                )}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Every stocking event, harvest lot, manual adjustment, and sale is tracked here.
+                {tr(
+                  language,
+                  'Kila tukio la upandikizaji, fungu la mavuno, marekebisho ya mkono, na mauzo hufuatiliwa hapa.',
+                  'Every stocking event, harvest lot, manual adjustment, and sale is tracked here.'
+                )}
               </p>
             </div>
           </div>
@@ -749,14 +816,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                <th className="py-2.5">Date</th>
-                <th className="py-2.5">Movement Type</th>
-                <th className="py-2.5">Pond / Source</th>
-                <th className="py-2.5">Species</th>
-                <th className="py-2.5">Reference</th>
-                <th className="py-2.5">Details</th>
-                <th className="py-2.5 text-right">Stock Change</th>
-                <th className="py-2.5 pl-3">Recorded By</th>
+                <th className="py-2.5">{tr(language, 'Tarehe', 'Date')}</th>
+                <th className="py-2.5">{tr(language, 'Aina ya Mwendo', 'Movement Type')}</th>
+                <th className="py-2.5">{tr(language, 'Bwawa / Chanzo', 'Pond / Source')}</th>
+                <th className="py-2.5">{tr(language, 'Aina', 'Species')}</th>
+                <th className="py-2.5">{tr(language, 'Kumbukumbu', 'Reference')}</th>
+                <th className="py-2.5">{tr(language, 'Maelezo', 'Details')}</th>
+                <th className="py-2.5 text-right">{tr(language, 'Mabadiliko ya Akiba', 'Stock Change')}</th>
+                <th className="py-2.5 pl-3">{tr(language, 'Aliyerekodi', 'Recorded By')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -775,7 +842,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                             : 'success'
                       }
                     >
-                      {entry.kind}
+                      {renderMovementKind(entry.kind)}
                     </Badge>
                   </td>
                   <td className="py-2.5 font-mono font-bold text-slate-800 dark:text-slate-200">
@@ -812,8 +879,12 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
         open={manualOpen}
         onClose={() => setManualOpen(false)}
         maxWidthClass="sm:max-w-2xl"
-        title="Manual Fish Stock Entry"
-        subtitle="Create a graded sellable fish stock lot or register/adjust live pond fish stock"
+        title={tr(language, 'Ingizo la Akiba ya Samaki kwa Mkono', 'Manual Fish Stock Entry')}
+        subtitle={tr(
+          language,
+          'Tengeneza fungu la samaki waliopangwa tayari kwa mauzo au sajili/rekebisha akiba ya samaki hai bwawani',
+          'Create a graded sellable fish stock lot or register/adjust live pond fish stock'
+        )}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
@@ -829,7 +900,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   : 'text-slate-600 dark:text-slate-300'
               }`}
             >
-              Graded Stock Lot (Ready to Sell)
+              {tr(language, 'Fungu Lililopangwa (Tayari Kuuza)', 'Graded Stock Lot (Ready to Sell)')}
             </button>
             <button
               type="button"
@@ -843,7 +914,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   : 'text-slate-600 dark:text-slate-300'
               }`}
             >
-              Live Pond Fish Stock (Stocking)
+              {tr(language, 'Akiba ya Samaki Hai Bwawani', 'Live Pond Fish Stock (Stocking)')}
             </button>
           </div>
 
@@ -857,7 +928,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="ms-pond"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Source Pond *
+                    {tr(language, 'Bwawa Chanzo *', 'Source Pond *')}
                   </label>
                   <select
                     id="ms-pond"
@@ -876,10 +947,12 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   >
                     {state.ponds.map((p) => (
                       <option key={p.id} value={p.code}>
-                        {p.code} — {p.species} ({formatNumber(p.currentFish)} fish)
+                        {p.code} — {p.species} ({formatNumber(p.currentFish)} {tr(language, 'samaki', 'fish')})
                       </option>
                     ))}
-                    <option value="EXTERNAL">External / Cold Room Opening Stock</option>
+                    <option value="EXTERNAL">
+                      {tr(language, 'Nje / Akiba ya Chumba cha Baridi', 'External / Cold Room Opening Stock')}
+                    </option>
                   </select>
                 </div>
                 <div>
@@ -887,7 +960,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="ms-species"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Fish Species *
+                    {tr(language, 'Aina ya Samaki *', 'Fish Species *')}
                   </label>
                   <select
                     id="ms-species"
@@ -907,14 +980,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="ms-batch"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Batch / Reference Code
+                    {tr(language, 'Msimbo wa Kundi / Kumbukumbu', 'Batch / Reference Code')}
                   </label>
                   <input
                     id="ms-batch"
                     type="text"
                     value={lotBatchCode}
                     onChange={(e) => setLotBatchCode(e.target.value)}
-                    placeholder="e.g. TIL-2026-001"
+                    placeholder={tr(language, 'mf. TIL-2026-001', 'e.g. TIL-2026-001')}
                     className={INPUT_CLASS}
                   />
                 </div>
@@ -929,17 +1002,23 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     className="h-4 w-4 rounded border-slate-300 text-blue-600"
                   />
                   <span>
-                    Deduct entered fish counts from {lotPondCode} live pond stock
+                    {tr(
+                      language,
+                      `Punguza idadi ya samaki iliyoingizwa kutoka akiba hai ya ${lotPondCode}`,
+                      `Deduct entered fish counts from ${lotPondCode} live pond stock`
+                    )}
                   </span>
                 </label>
               )}
 
               <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/60 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Large Grade</div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {tr(language, 'Daraja Kubwa', 'Large Grade')}
+                  </div>
                   <div>
                     <label htmlFor="ms-lg-kg" className="mb-1 block text-[11px] text-slate-500">
-                      Weight (kg)
+                      {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                     </label>
                     <input
                       id="ms-lg-kg"
@@ -954,7 +1033,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   </div>
                   <div>
                     <label htmlFor="ms-lg-cnt" className="mb-1 block text-[11px] text-slate-500">
-                      Fish Count
+                      {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                     </label>
                     <input
                       id="ms-lg-cnt"
@@ -969,10 +1048,12 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Medium Grade</div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {tr(language, 'Daraja la Kati', 'Medium Grade')}
+                  </div>
                   <div>
                     <label htmlFor="ms-md-kg" className="mb-1 block text-[11px] text-slate-500">
-                      Weight (kg)
+                      {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                     </label>
                     <input
                       id="ms-md-kg"
@@ -987,7 +1068,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   </div>
                   <div>
                     <label htmlFor="ms-md-cnt" className="mb-1 block text-[11px] text-slate-500">
-                      Fish Count
+                      {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                     </label>
                     <input
                       id="ms-md-cnt"
@@ -1002,10 +1083,12 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Small Grade</div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {tr(language, 'Daraja Ndogo', 'Small Grade')}
+                  </div>
                   <div>
                     <label htmlFor="ms-sm-kg" className="mb-1 block text-[11px] text-slate-500">
-                      Weight (kg)
+                      {tr(language, 'Uzito (kg)', 'Weight (kg)')}
                     </label>
                     <input
                       id="ms-sm-kg"
@@ -1020,7 +1103,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   </div>
                   <div>
                     <label htmlFor="ms-sm-cnt" className="mb-1 block text-[11px] text-slate-500">
-                      Fish Count
+                      {tr(language, 'Idadi ya Samaki', 'Fish Count')}
                     </label>
                     <input
                       id="ms-sm-cnt"
@@ -1041,14 +1124,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="ms-notes"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Stock Notes
+                    {tr(language, 'Maelezo ya Akiba', 'Stock Notes')}
                   </label>
                   <input
                     id="ms-notes"
                     type="text"
                     value={lotNotes}
                     onChange={(e) => setLotNotes(e.target.value)}
-                    placeholder="e.g. Chilled storage box #2"
+                    placeholder={tr(language, 'mf. Sanduku la baridi #2', 'e.g. Chilled storage box #2')}
                     className={INPUT_CLASS}
                   />
                 </div>
@@ -1058,7 +1141,8 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
                     <span className="flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Approval PIN (4 digits) *
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />{' '}
+                      {tr(language, 'PIN ya Uidhinishaji (namba 4) *', 'Approval PIN (4 digits) *')}
                     </span>
                     <ValidCheck valid={/^\d{4}$/.test(pin)} />
                   </label>
@@ -1067,7 +1151,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     type="password"
                     inputMode="numeric"
                     maxLength={4}
-                    placeholder="Enter 4-digit PIN"
+                    placeholder={tr(language, 'Weka PIN ya namba 4', 'Enter 4-digit PIN')}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
                     className={`${INPUT_CLASS} font-mono tracking-widest`}
@@ -1082,7 +1166,8 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                 disabled={!perms.canApproveHarvest && !perms.canRecordSale}
                 onClick={handleSubmitManualLot}
               >
-                <CheckCircle2 className="h-4 w-4" /> Save Graded Fish Stock Lot
+                <CheckCircle2 className="h-4 w-4" />{' '}
+                {tr(language, 'Hifadhi Fungu la Samaki Waliopangwa', 'Save Graded Fish Stock Lot')}
               </Button>
             </div>
           ) : (
@@ -1093,7 +1178,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-pond"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Target Pond *
+                    {tr(language, 'Bwawa Lengwa *', 'Target Pond *')}
                   </label>
                   <select
                     id="mp-pond"
@@ -1107,7 +1192,8 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   >
                     {state.ponds.map((p) => (
                       <option key={p.id} value={p.code}>
-                        {p.code} ({p.name}) — {formatNumber(p.currentFish)} / {formatNumber(p.maxCapacity)} fish
+                        {p.code} ({p.name}) — {formatNumber(p.currentFish)} / {formatNumber(p.maxCapacity)}{' '}
+                        {tr(language, 'samaki', 'fish')}
                       </option>
                     ))}
                   </select>
@@ -1117,7 +1203,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-species"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Species *
+                    {tr(language, 'Aina *', 'Species *')}
                   </label>
                   <select
                     id="mp-species"
@@ -1140,13 +1226,13 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-count"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Fish Count to Add *
+                    {tr(language, 'Idadi ya Samaki wa Kuongeza *', 'Fish Count to Add *')}
                   </label>
                   <input
                     id="mp-count"
                     type="number"
                     min="1"
-                    placeholder="e.g. 5000"
+                    placeholder={tr(language, 'mf. 5000', 'e.g. 5000')}
                     value={pondFishCount}
                     onChange={(e) => setPondFishCount(e.target.value)}
                     className={`${INPUT_CLASS} tabular-nums`}
@@ -1157,7 +1243,7 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-avg"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Average Fish Weight (g) *
+                    {tr(language, 'Uzito Wastani wa Samaki (g) *', 'Average Fish Weight (g) *')}
                   </label>
                   <input
                     id="mp-avg"
@@ -1177,14 +1263,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-hatchery"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Source Hatchery
+                    {tr(language, 'Kitalu Chanzo (Hatchery)', 'Source Hatchery')}
                   </label>
                   <input
                     id="mp-hatchery"
                     type="text"
                     value={pondHatchery}
                     onChange={(e) => setPondHatchery(e.target.value)}
-                    placeholder="e.g. Pwani Fingerlings Ltd"
+                    placeholder={tr(language, 'mf. Pwani Fingerlings Ltd', 'e.g. Pwani Fingerlings Ltd')}
                     className={INPUT_CLASS}
                   />
                 </div>
@@ -1193,14 +1279,14 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                     htmlFor="mp-supplier"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Supplier
+                    {tr(language, 'Msambazaji', 'Supplier')}
                   </label>
                   <input
                     id="mp-supplier"
                     type="text"
                     value={pondSupplier}
                     onChange={(e) => setPondSupplier(e.target.value)}
-                    placeholder="e.g. TAFIRI Certified Hatchery"
+                    placeholder={tr(language, 'mf. TAFIRI Certified Hatchery', 'e.g. TAFIRI Certified Hatchery')}
                     className={INPUT_CLASS}
                   />
                 </div>
@@ -1211,20 +1297,21 @@ export const FishStockModule: React.FC<FishStockModuleProps> = ({
                   htmlFor="mp-notes"
                   className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  Notes ({todayIso()})
+                  {tr(language, 'Maelezo', 'Notes')} ({todayIso()})
                 </label>
                 <input
                   id="mp-notes"
                   type="text"
                   value={pondNotes}
                   onChange={(e) => setPondNotes(e.target.value)}
-                  placeholder="Optional stocking verification notes"
+                  placeholder={tr(language, 'Maelezo ya hiari ya uhakiki wa upandikizaji', 'Optional stocking verification notes')}
                   className={INPUT_CLASS}
                 />
               </div>
 
               <Button variant="primary" size="lg" fullWidth onClick={handleSubmitManualPondStock}>
-                <CheckCircle2 className="h-4 w-4" /> Register Live Pond Fish Stock
+                <CheckCircle2 className="h-4 w-4" />{' '}
+                {tr(language, 'Sajili Akiba ya Samaki Hai Bwawani', 'Register Live Pond Fish Stock')}
               </Button>
             </div>
           )}

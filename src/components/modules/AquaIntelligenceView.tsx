@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Bot, Send, ShieldCheck } from 'lucide-react';
 import { AquacultureState, Language } from '../../types/aquaculture';
+import { tr } from '../../i18n/translations';
 import {
   Badge,
   Button,
@@ -26,14 +27,29 @@ interface ChatMessage {
   streamReveal?: boolean;
 }
 
-const SUGGESTED_QUESTIONS = [
+const SUGGESTED_QUESTIONS_SW = [
+  'Kuna samaki wangapi hai katika mabwawa yote sasa?',
+  'Ni bwawa lipi lina vifo vingi zaidi na hatua gani ilichukuliwa?',
+  'Je, kuna tofauti zozote zisizoelezeka kati ya chakula kilichotolewa bohari na kilichorekodiwa kulishwa?',
+  'Makadirio ya gharama ya kuzalisha kilo moja ya sato (tilapia) ni shilingi ngapi?',
+  'Ni mabwawa yapi yanakaribia tarehe zake za kuvunwa?',
+  'Nionyeshe hali ya ubora wa maji na tahadhari za leo kwa Kiswahili.',
+];
+
+const SUGGESTED_QUESTIONS_EN = [
   'How many fish are currently alive across all ponds?',
   'Which pond has the highest mortality rate and what action was taken?',
   'Are there unexplained differences between feed issued and feed recorded as used?',
   'What is the estimated cost of producing one kilogram of tilapia?',
   'Which ponds are approaching their planned harvest dates?',
-  'Nionyeshe hali ya ubora wa maji na tahadhari za leo kwa Kiswahili.',
+  'Show me today’s water quality status and active alerts.',
 ];
+
+function getWelcomeText(language: Language): string {
+  return language === 'sw'
+    ? 'Karibu kwenye Aqua Intelligence. Uliza swali lolote kuhusu samaki hai, vifo, tofauti za chakula, ubora wa maji, au faida kwa TZS — ninatumia rekodi halisi za shamba lako pekee.'
+    : 'Welcome to Aqua Intelligence. Ask any operational or financial question about live fish counts, mortality, feed variances, water quality, or TZS unit economics — answers are grounded strictly in your live farm records.';
+}
 
 const StreamingAssistantText: React.FC<{ text: string; animateReveal?: boolean }> = ({
   text,
@@ -70,11 +86,8 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
     {
       id: 'welcome',
       role: 'assistant',
-      text:
-        language === 'sw'
-          ? 'Karibu kwenye Aqua Intelligence. Uliza swali lolote kuhusu samaki hai, vifo, tofauti za chakula, ubora wa maji, au faida kwa TZS — ninatumia rekodi halisi za shamba lako pekee.'
-          : 'Welcome to Aqua Intelligence. Ask any operational or financial question about live fish counts, mortality, feed variances, water quality, or TZS unit economics — answers are grounded strictly in your live farm records.',
-      timestamp: 'Now',
+      text: getWelcomeText(language),
+      timestamp: tr(language, 'Sasa', 'Now'),
       streamReveal: false,
     },
   ]);
@@ -83,8 +96,24 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    setMessages((prev) =>
+      prev.length === 1 && prev[0].id === 'welcome'
+        ? [
+            {
+              ...prev[0],
+              text: getWelcomeText(language),
+              timestamp: tr(language, 'Sasa', 'Now'),
+            },
+          ]
+        : prev
+    );
+  }, [language]);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages.length, loading]);
+
+  const suggestedQuestions = language === 'sw' ? SUGGESTED_QUESTIONS_SW : SUGGESTED_QUESTIONS_EN;
 
   const askAssistant = async (questionText: string) => {
     const q = questionText.trim();
@@ -150,7 +179,14 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
           {
             id: `a-${Date.now()}`,
             role: 'assistant',
-            text: `Error: ${data.error || 'Unable to reach Aqua Intelligence service.'}`,
+            text: `${tr(language, 'Hitilafu', 'Error')}: ${
+              data.error ||
+              tr(
+                language,
+                'Imeshindwa kuwasiliana na huduma ya Aqua Intelligence.',
+                'Unable to reach Aqua Intelligence service.'
+              )
+            }`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             streamReveal: true,
           },
@@ -173,7 +209,11 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
         {
           id: `a-${Date.now()}`,
           role: 'assistant',
-          text: 'Network error communicating with /api/ai/aqua-intelligence.',
+          text: tr(
+            language,
+            'Hitilafu ya mtandao wakati wa kuwasiliana na Aqua Intelligence.',
+            'Network error communicating with /api/ai/aqua-intelligence.'
+          ),
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           streamReveal: false,
         },
@@ -192,25 +232,34 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Aqua Intelligence — Executive Decision Assistant
+              {tr(
+                language,
+                'Aqua Intelligence — Msaidizi Mahiri wa Maamuzi',
+                'Aqua Intelligence — Executive Decision Assistant'
+              )}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Queries live ponds, batches, feed reconciliation, mortality logs & TZS financials without fabricating missing data.
+              {tr(
+                language,
+                'Hujibu kuhusu mabwawa hai, makundi, uhakiki wa chakula, rekodi za vifo na fedha kwa TZS bila kubuni taarifa.',
+                'Queries live ponds, batches, feed reconciliation, mortality logs & TZS financials without fabricating missing data.'
+              )}
             </p>
           </div>
         </div>
         <Badge variant="success">
-          <ShieldCheck className="h-3.5 w-3.5" /> Grounded in Live Farm Records
+          <ShieldCheck className="h-3.5 w-3.5" />{' '}
+          {tr(language, 'Msingi wake ni Rekodi Halisi za Shamba', 'Grounded in Live Farm Records')}
         </Badge>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-4">
           <h3 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Executive Quick Queries
+            {tr(language, 'Maswali ya Haraka', 'Executive Quick Queries')}
           </h3>
           <div className="space-y-2">
-            {SUGGESTED_QUESTIONS.map((q) => (
+            {suggestedQuestions.map((q) => (
               <button
                 key={q}
                 type="button"
@@ -264,7 +313,7 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600 dark:bg-sky-400" />
                   </span>
-                  Thinking & analyzing live farm database...
+                  {tr(language, 'Inachambua rekodi halisi za shamba...', 'Thinking & analyzing live farm database...')}
                 </div>
                 <CardListSkeleton rows={2} />
               </div>
@@ -283,7 +332,11 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Aqua Intelligence (English or Kiswahili)..."
+              placeholder={tr(
+                language,
+                'Uliza Aqua Intelligence (Kiswahili au Kiingereza)...',
+                'Ask Aqua Intelligence (English or Kiswahili)...'
+              )}
               className={`${INPUT_CLASS} min-h-[42px] flex-1`}
             />
             <Button
@@ -291,7 +344,7 @@ export const AquaIntelligenceView: React.FC<AquaIntelligenceViewProps> = ({ stat
               variant="primary"
               disabled={loading || !input.trim()}
             >
-              <Send className="h-3.5 w-3.5" /> Ask
+              <Send className="h-3.5 w-3.5" /> {tr(language, 'Uliza', 'Ask')}
             </Button>
           </form>
         </Card>

@@ -342,3 +342,159 @@ export const TRANSLATIONS: Record<Language, AppTranslations> = {
     },
   },
 };
+
+export function tr(language: Language, swText: string, enText: string): string {
+  return language === 'sw' ? swText : enText;
+}
+
+const DOMAIN_SW_MAP: Record<string, string> = {
+  // Pond & Water & Health Statuses
+  Healthy: 'Salama',
+  Attention: 'Tahadhari',
+  Preparing: 'Maandalizi',
+  'Harvest Ready': 'Tayari Kuvunwa',
+  Safe: 'Salama',
+  Critical: 'Hatari',
+  Growing: 'Wanakua',
+  'Partial Harvest': 'Mavuno ya Sehemu',
+  Completed: 'Imekamilika',
+  'In Stock': 'Ipo Bohari',
+  'Low Stock': 'Akiba Ndogo',
+  'Out of Stock': 'Imeisha Bohari',
+  Paid: 'Imelipwa',
+  Partial: 'Nusu',
+  Credit: 'Mkopo',
+  'Credit Debt': 'Deni / Mkopo',
+  'Pending Debt': 'Deni Linasubiri',
+  'Pending Dispatch': 'Inasubiri Kutumwa',
+  'In Transit': 'Njiani',
+  Delivered: 'Imefikishwa',
+  Open: 'Wazi',
+  Converted: 'Imekuwa Mauzo',
+  Cancelled: 'Imefutwa',
+  Reported: 'Imeripotiwa',
+  'Technician Verified': 'Imethibitishwa na Mtaalamu',
+  'Treatment Approved': 'Matibabu Yameidhinishwa',
+  'Fed & Reconciled': 'Imelishwa na Kuhakikiwa',
+  'Variance Flagged': 'Tofauti Imebainika',
+  Approved: 'Imeidhinishwa',
+  'Pending Store Issuance': 'Inasubiri Kutolewa Bohari',
+  'Issued to Keeper': 'Imetolewa kwa Msimamizi',
+  Pending: 'Inasubiri',
+  'In Progress': 'Inaendelea',
+  High: 'Juu',
+  Medium: 'Wastani',
+  Low: 'Chini',
+  Info: 'Taarifa',
+  Operational: 'Inafanya Kazi',
+  Maintenance: 'Matengenezo',
+  'No Stock': 'Hakuna Akiba',
+  Active: 'Inafanya Kazi',
+
+  // Fish Grades, Customer Types & Tiers
+  Large: 'Kubwa',
+  Small: 'Ndogo',
+  Wholesale: 'Jumla',
+  Wholesaler: 'Muuzaji wa Jumla',
+  Retail: 'Rejareja',
+  Retailer: 'Muuzaji Rejareja',
+  'Hotel/HORECA': 'Hoteli / Mgahawa',
+  'Hotel/Restaurant': 'Hoteli / Mgahawa',
+  Market: 'Soko',
+  Individual: 'Mtu Binafsi',
+  Exporter: 'Msafirishaji Nje',
+  Standard: 'Kawaida',
+  VIP: 'VIP',
+  Harvest: 'Mavuno',
+  Farm: 'Shamba',
+
+  // Payment Methods
+  Cash: 'Taslimu',
+  'Bank Transfer': 'Benki',
+  Cheque: 'Hundi',
+  'M-Pesa': 'M-Pesa',
+  'Tigo Pesa': 'Tigo Pesa',
+  'Airtel Money': 'Airtel Money',
+  Halopesa: 'Halopesa',
+
+  // Unit & Operation Types
+  'Lined Pond': 'Bwawa la Plastiki',
+  'Earthen Pond': 'Bwawa la Udongo',
+  'Concrete Tank': 'Tanki la Zege',
+  'Lake Cage': 'Kizimba Ziwani',
+  Hatchery: 'Kitalu cha Vifaranga',
+  Nursery: 'Bwawa la Kulelea',
+  'Grow-out Pond': 'Bwawa la Kukuzia',
+  'Cage Farming': 'Ufugaji wa Vizimba',
+  'Tank Farming': 'Ufugaji wa Matanki',
+
+  // Infrastructure Markers
+  'Water Inlet': 'Mlango wa Kuingiza Maji',
+  'Water Outlet': 'Mlango wa Kutoa Maji',
+  'Drainage Channel': 'Mfereji wa Maji',
+  Borehole: 'Kisima Kirefu',
+  Pump: 'Pampu ya Maji',
+  Aerator: 'Kipulizia Hewa',
+  'Water Sensor': 'Kipima Maji (Sensor)',
+  Feeder: 'Chombo cha Chakula',
+  Generator: 'Jenereta',
+  Security: 'Ulinzi',
+
+  // Inventory & Finance Categories
+  Feed: 'Chakula',
+  Fingerlings: 'Vifaranga',
+  Medicine: 'Dawa',
+  Fuel: 'Mafuta',
+  Equipment: 'Vifaa',
+  Revenue: 'Mapato',
+  Expense: 'Matumizi',
+  'Harvest Sales': 'Mauzo ya Mavuno',
+  'Feed Purchase': 'Ununuzi wa Chakula',
+  'Fingerling Purchase': 'Ununuzi wa Vifaranga',
+  'Medicine & Treatments': 'Dawa na Matibabu',
+  'Salaries & Labor': 'Mishahara na Vibaruwa',
+  'Fuel & Electricity': 'Mafuta na Umeme',
+  'Equipment Maintenance': 'Matengenezo ya Vifaa',
+
+  // Roles
+  owner: 'Mmiliki wa Shamba',
+  manager: 'Meneja wa Shamba',
+  technician: 'Mtaalamu wa Samaki',
+  keeper: 'Msimamizi wa Bwawa',
+  storekeeper: 'Mtunza Bohari',
+  'Farm Owner': 'Mmiliki wa Shamba',
+  'Farm Manager': 'Meneja wa Shamba',
+  'Fisheries Technician': 'Mtaalamu wa Samaki',
+  'Pond Keeper': 'Msimamizi wa Bwawa',
+  Storekeeper: 'Mtunza Bohari',
+
+  // GIS & Sources
+  'Satellite Drawing': 'Mchoro wa Satelaiti',
+  'GPS Boundary Walk': 'Kutembea Mpaka wa GPS',
+  'GPX/GeoJSON Import': 'Upakiaji GPX/GeoJSON',
+  'Registry Seed': 'Usajili wa Awali',
+  'Manual Stock': 'Akiba ya Mkono',
+  'Manual (Mobile)': 'Kipimo cha Mkono (Simu)',
+  'Bluetooth Meter': 'Kipima cha Bluetooth',
+  'IoT ESP32 Sensor': 'Sensor ya IoT ESP32',
+
+  // Relative time
+  'Just now': 'Sasa hivi',
+};
+
+export function tDomain(language: Language, value?: string | null): string {
+  if (!value) return '';
+  if (language === 'en') return value;
+  if (DOMAIN_SW_MAP[value]) return DOMAIN_SW_MAP[value];
+  // Handle relative time phrases from seed data gracefully
+  if (/^\d+\s+mins?\s+ago$/i.test(value)) {
+    return `Dakika ${value.replace(/\D+/g, '')} zilizopita`;
+  }
+  if (/^\d+\s+hours?\s+ago$/i.test(value)) {
+    return `Saa ${value.replace(/\D+/g, '')} zilizopita`;
+  }
+  if (/^\d+\s+days?\s+ago$/i.test(value)) {
+    return `Siku ${value.replace(/\D+/g, '')} zilizopita`;
+  }
+  return value;
+}

@@ -35,8 +35,12 @@ import {
   RefreshCw,
   RotateCcw,
   Boxes,
+  Coins,
+  ArrowLeft,
+  ChevronLeft,
+  MoreHorizontal,
 } from 'lucide-react';
-import { DURATIONS, EASE_OUT, SPRING_SNAPPY, fadeUp, usePreferences } from './ui';
+import { DURATIONS, EASE_OUT, SPRING_SNAPPY, dropdownMenu, fadeUp, usePreferences } from './ui';
 import {
   AquacultureState,
   Customer,
@@ -52,7 +56,7 @@ import {
   SaleLine,
 } from './types/aquaculture';
 import { ASSET_IMAGES, INITIAL_STATE } from './data/seedData';
-import { TRANSLATIONS } from './i18n/translations';
+import { TRANSLATIONS, tDomain, tr } from './i18n/translations';
 import { nowTimestamp, todayIso } from './utils/formatters';
 import { getPermissions } from './utils/rbac';
 import {
@@ -72,7 +76,7 @@ import {
   QuickActionModals,
   QuickActionType,
 } from './components/QuickActionModals';
-import { FarmPondsModule } from './components/modules/FarmPondsModule';
+import { FarmPondsModule, FarmsModuleSection } from './components/modules/FarmPondsModule';
 import { FishSpeciesModule } from './components/modules/FishSpeciesModule';
 import {
   FishStockModule,
@@ -92,15 +96,33 @@ import {
   TasksAlertsModule,
 } from './components/modules/CommerceAccountabilityModule';
 import { SalesModule } from './components/sales/SalesModule';
-import {
-  QuickSaleFlow,
+import type {
   QuickSaleSubmitPayload,
   QuickSaleSubmitResult,
 } from './components/sales/QuickSaleFlow';
 import { InvoiceReceiptModal } from './components/sales/InvoiceReceiptModal';
 import { AquaIntelligenceView } from './components/modules/AquaIntelligenceView';
+import { useDeviceAndPWA } from './hooks/useDeviceAndPWA';
+import { OfflineStatusPill, PWAInstallButton, PWAInstallCard } from './components/pwa/PWAInstallUI';
+import { MobileAppScreens } from './components/mobile/MobileAppScreens';
+import { MobileMoreSheet } from './components/mobile/MobileMoreSheet';
 
 const STORAGE_KEY = 'dukaaqusmart_state_v1';
+
+const MOBILE_SHOWCASE_NAVS = new Set<NavSection>([
+  'dashboard',
+  'farms-ponds',
+  'fish-species',
+  'fish-stock',
+  'feeding',
+  'water-quality',
+  'fish-health',
+  'harvest-sales',
+  'inventory',
+  'finance',
+  'tasks-alerts',
+  'aqua-intelligence',
+]);
 
 export default function App() {
   const [state, setState] = useState<AquacultureState>(() => {
@@ -116,19 +138,28 @@ export default function App() {
     return INITIAL_STATE;
   });
 
-  const [activeNav, setActiveNav] = useState<NavSection>('dashboard');
-  const [language, setLanguage] = useState<Language>('en');
+  const [activeNav, setActiveNav] = useState<NavSection>(() => {
+    if (typeof window !== 'undefined') {
+      const view = new URLSearchParams(window.location.search).get('view') as NavSection | null;
+      if (view && MOBILE_SHOWCASE_NAVS.has(view)) return view;
+    }
+    return 'dashboard';
+  });
+  const [farmsSubView, setFarmsSubView] = useState<FarmsModuleSection>('overview');
+  const [farmsNavExpanded, setFarmsNavExpanded] = useState<boolean>(false);
   const [selectedFarmId, setSelectedFarmId] = useState<string>('farm-dsm');
   const [quickAction, setQuickAction] = useState<QuickActionType>(null);
   const [inventoryInitialItemId, setInventoryInitialItemId] = useState<string | null>(null);
   const [harvestInitialPondCode, setHarvestInitialPondCode] = useState<string | null>(null);
-  const [quickSaleOpen, setQuickSaleOpen] = useState(false);
+  const [saleWizardTriggerKey, setSaleWizardTriggerKey] = useState(0);
   const [quickSaleInitialLotId, setQuickSaleInitialLotId] = useState<string | undefined>(undefined);
   const [quickSaleInitialPondCode, setQuickSaleInitialPondCode] = useState<string | undefined>(undefined);
   const [quickSalePreOrder, setQuickSalePreOrder] = useState<PreOrder | null>(null);
   const [activeReceiptSaleId, setActiveReceiptSaleId] = useState<string | null>(null);
   const [selectedPondQr, setSelectedPondQr] = useState<Pond | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileFullWorkspace, setMobileFullWorkspace] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -139,6 +170,7 @@ export default function App() {
   const [toastState, setToastState] = useState<{
     id: number;
     message: string;
+    kind?: 'success' | 'sale' | 'stock' | 'payment' | 'alert' | 'info';
     undoSnapshot?: AquacultureState;
     undoCloseReceipt?: boolean;
   } | null>(null);
@@ -146,7 +178,19 @@ export default function App() {
   const inFlightSaleKeysRef = useRef<Set<string>>(new Set());
   const committedSaleKeysRef = useRef<Set<string>>(new Set());
 
-  const { themeMode, cycleThemeMode, effectiveReducedMotion, triggerHaptic } = usePreferences();
+  const { language, setLanguage, themeMode, cycleThemeMode, effectiveReducedMotion, triggerHaptic } =
+    usePreferences();
+  const devicePwa = useDeviceAndPWA();
+
+  const navigateTo = (nav: NavSection, opts?: { fullWorkspace?: boolean; farmsSection?: FarmsModuleSection }) => {
+    setActiveNav(nav);
+    setMobileFullWorkspace(Boolean(opts?.fullWorkspace));
+    if (opts?.farmsSection) {
+      setFarmsSubView(opts.farmsSection);
+    }
+    setMobileMenuOpen(false);
+    setMobileMoreOpen(false);
+  };
 
   const activeReceiptSale =
     activeReceiptSaleId ? state.sales.find((s) => s.id === activeReceiptSaleId) || null : null;
@@ -156,7 +200,9 @@ export default function App() {
     setQuickSaleInitialLotId(opts?.lotId);
     setQuickSaleInitialPondCode(opts?.pondCode);
     setQuickSalePreOrder(opts?.preOrder || null);
-    setQuickSaleOpen(true);
+    setSaleWizardTriggerKey((k) => k + 1);
+    setMobileFullWorkspace(true);
+    setActiveNav('harvest-sales');
   };
 
   const openInventoryModal = (itemId?: string | null) => {
@@ -187,13 +233,18 @@ export default function App() {
 
   const showToast = (
     message: string,
-    opts?: { undoSnapshot?: AquacultureState; undoCloseReceipt?: boolean }
+    opts?: {
+      kind?: 'success' | 'sale' | 'stock' | 'payment' | 'alert' | 'info';
+      undoSnapshot?: AquacultureState;
+      undoCloseReceipt?: boolean;
+    }
   ) => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     const id = Date.now();
     setToastState({
       id,
       message,
+      kind: opts?.kind || 'success',
       undoSnapshot: opts?.undoSnapshot,
       undoCloseReceipt: opts?.undoCloseReceipt,
     });
@@ -210,7 +261,7 @@ export default function App() {
     }
     triggerHaptic(8);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    setToastState({ id: Date.now(), message: TRANSLATIONS[language].ui.undone });
+    setToastState({ id: Date.now(), message: TRANSLATIONS[language].ui.undone, kind: 'info' });
     toastTimerRef.current = window.setTimeout(() => setToastState(null), 2400);
   };
 
@@ -223,7 +274,10 @@ export default function App() {
       setSyncProgress(100);
       setState((prev) => ({ ...prev, pendingSyncQueue: [] }));
       triggerHaptic(10);
-      showToast('All queued farm records synced.');
+      showToast(
+        tr(language, 'Kumbukumbu zote za shamba zimesawazishwa.', 'All queued farm records synced.'),
+        { kind: 'info' }
+      );
       window.setTimeout(() => {
         setIsSyncing(false);
         setSyncProgress(0);
@@ -279,7 +333,13 @@ export default function App() {
       ],
     }));
     setRoleMenuOpen(false);
-    showToast(`Switched active role to ${emp.name} (${emp.roleLabel})`);
+    showToast(
+      tr(
+        language,
+        `Umebadilisha akaunti kwenda ${emp.name} (${tDomain(language, emp.roleLabel)})`,
+        `Switched active role to ${emp.name} (${emp.roleLabel})`
+      )
+    );
   };
 
   const handleRecordFeeding = (payload: {
@@ -292,7 +352,14 @@ export default function App() {
     pin: string;
   }) => {
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'PIN ya tarakimu 4 si sahihi. Tafadhali hakikisha PIN yako na ujaribu tena.',
+          'Invalid 4-digit PIN. Please check your PIN and try again.'
+        ),
+      };
     }
     const prevSnapshot = state;
     const variance = Number(Math.abs(payload.issuedKg - payload.actualFedKg).toFixed(2));
@@ -372,9 +439,16 @@ export default function App() {
       ],
     }));
     triggerHaptic(10);
-    showToast(`Feeding logged for ${payload.pondCode} (${payload.actualFedKg} kg).`, {
-      undoSnapshot: prevSnapshot,
-    });
+    showToast(
+      tr(
+        language,
+        `Ulishaji wa ${payload.pondCode} umerekodiwa (${payload.actualFedKg} kg).`,
+        `Feeding logged for ${payload.pondCode} (${payload.actualFedKg} kg).`
+      ),
+      {
+        undoSnapshot: prevSnapshot,
+      }
+    );
     return { ok: true };
   };
 
@@ -517,8 +591,12 @@ export default function App() {
     });
     triggerHaptic(10);
     showToast(
-      `Saved ${payload.quantity} ${payload.unit} of ${payload.name} (${payload.paymentStatus}).`,
-      { undoSnapshot: prevSnapshot }
+      tr(
+        language,
+        `Imehifadhiwa ${payload.quantity} ${payload.unit} za ${payload.name} (${tDomain(language, payload.paymentStatus)}).`,
+        `Saved ${payload.quantity} ${payload.unit} of ${payload.name} (${payload.paymentStatus}).`
+      ),
+      { kind: 'stock', undoSnapshot: prevSnapshot }
     );
   };
 
@@ -590,7 +668,13 @@ export default function App() {
           ]
         : prev.alerts,
     }));
-    showToast(`Water quality recorded for ${payload.pondCode}.`);
+    showToast(
+      tr(
+        language,
+        `Ubora wa maji wa ${payload.pondCode} umerekodiwa.`,
+        `Water quality recorded for ${payload.pondCode}.`
+      )
+    );
   };
 
   const handleReportMortality = (payload: {
@@ -602,10 +686,24 @@ export default function App() {
   }) => {
     const perms = getPermissions(state.activeUser.role);
     if (!perms.canReportMortality) {
-      return { ok: false, error: `Role ${state.activeUser.roleLabel} does not report pond mortality.` };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          `Wajibu wa ${tDomain(language, state.activeUser.roleLabel)} hauruhusiwi kuripoti vifo vya samaki.`,
+          `Role ${state.activeUser.roleLabel} does not report pond mortality.`
+        ),
+      };
     }
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'PIN ya tarakimu 4 si sahihi. Tafadhali hakikisha PIN yako na ujaribu tena.',
+          'Invalid 4-digit PIN. Please check your PIN and try again.'
+        ),
+      };
     }
     const batch = state.batches.find((b) => b.pondCode === payload.pondCode);
     const wq = state.waterReadings.find((w) => w.pondCode === payload.pondCode);
@@ -672,7 +770,13 @@ export default function App() {
         ...prev.auditLogs,
       ],
     }));
-    showToast(`Mortality logged for ${payload.pondCode}. Deletion locked for accountability.`);
+    showToast(
+      tr(
+        language,
+        `Vifo vya ${payload.pondCode} vimeripotiwa. Ufutaji umefungwa kwa uwajibikaji.`,
+        `Mortality logged for ${payload.pondCode}. Deletion locked for accountability.`
+      )
+    );
     return { ok: true };
   };
 
@@ -692,16 +796,30 @@ export default function App() {
     if (!perms.canApproveHarvest) {
       return {
         ok: false,
-        error: `Role ${state.activeUser.roleLabel} cannot approve harvests. Switch to Owner or Farm Manager.`,
+        error: tr(
+          language,
+          `Wajibu wa ${tDomain(language, state.activeUser.roleLabel)} hauwezi kuidhinisha mavuno. Badilisha kwenda Mmiliki au Meneja wa Shamba.`,
+          `Role ${state.activeUser.roleLabel} cannot approve harvests. Switch to Owner or Farm Manager.`
+        ),
       };
     }
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'PIN ya tarakimu 4 si sahihi. Tafadhali hakikisha PIN yako na ujaribu tena.',
+          'Invalid 4-digit PIN. Please check your PIN and try again.'
+        ),
+      };
     }
 
     const pond = state.ponds.find((p) => p.code === payload.pondCode);
     if (!pond) {
-      return { ok: false, error: 'Selected pond was not found.' };
+      return {
+        ok: false,
+        error: tr(language, 'Bwawa lililochaguliwa halijapatikana.', 'Selected pond was not found.'),
+      };
     }
 
     const totalCount =
@@ -714,12 +832,23 @@ export default function App() {
     const damagedKg = roundKg(Math.max(0, payload.damagedKg || 0));
 
     if (totalKg <= 0 || totalCount <= 0) {
-      return { ok: false, error: 'Enter graded fish counts and weights greater than 0.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Weka idadi na uzito wa samaki waliopangwa daraja zaidi ya 0.',
+          'Enter graded fish counts and weights greater than 0.'
+        ),
+      };
     }
     if (totalCount > pond.currentFish) {
       return {
         ok: false,
-        error: `Harvest count (${totalCount.toLocaleString()}) exceeds live fish in ${pond.code} (${pond.currentFish.toLocaleString()}).`,
+        error: tr(
+          language,
+          `Idadi ya mavuno (${totalCount.toLocaleString()}) inazidi samaki hai waliopo ${pond.code} (${pond.currentFish.toLocaleString()}).`,
+          `Harvest count (${totalCount.toLocaleString()}) exceeds live fish in ${pond.code} (${pond.currentFish.toLocaleString()}).`
+        ),
       };
     }
 
@@ -820,9 +949,16 @@ export default function App() {
       ],
     }));
     triggerHaptic(10);
-    showToast(`Harvest lot ${lotCode} saved (${totalKg.toFixed(1)} kg ready to sell).`, {
-      undoSnapshot: prevSnapshot,
-    });
+    showToast(
+      tr(
+        language,
+        `Mavuno ${lotCode} yamehifadhiwa (${totalKg.toFixed(1)} kg tayari kuuzwa).`,
+        `Harvest lot ${lotCode} saved (${totalKg.toFixed(1)} kg ready to sell).`
+      ),
+      {
+        undoSnapshot: prevSnapshot,
+      }
+    );
     return { ok: true, lotId };
   };
 
@@ -834,11 +970,18 @@ export default function App() {
     if (!perms.canApproveHarvest && !perms.canRecordSale) {
       return {
         ok: false,
-        error: `Role ${state.activeUser.roleLabel} cannot create manual fish stock lots.`,
+        error: tr(
+          language,
+          `Wajibu wa ${tDomain(language, state.activeUser.roleLabel)} hauwezi kuongeza akiba ya samaki kwa mkono.`,
+          `Role ${state.activeUser.roleLabel} cannot create manual fish stock lots.`
+        ),
       };
     }
     if (payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: 'Invalid 4-digit approval PIN.' };
+      return {
+        ok: false,
+        error: tr(language, 'PIN ya tarakimu 4 si sahihi.', 'Invalid 4-digit approval PIN.'),
+      };
     }
 
     const totalCount =
@@ -849,7 +992,14 @@ export default function App() {
       Math.max(0, payload.largeKg) + Math.max(0, payload.mediumKg) + Math.max(0, payload.smallKg)
     );
     if (totalKg <= 0) {
-      return { ok: false, error: 'Enter graded stock weight greater than 0 kg.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Weka uzito wa samaki waliopangwa daraja zaidi ya 0 kg.',
+          'Enter graded stock weight greater than 0 kg.'
+        ),
+      };
     }
 
     const sourcePond =
@@ -859,7 +1009,11 @@ export default function App() {
     if (payload.deductFromPond && sourcePond && totalCount > sourcePond.currentFish) {
       return {
         ok: false,
-        error: `Fish count (${totalCount.toLocaleString()}) exceeds live fish in ${sourcePond.code} (${sourcePond.currentFish.toLocaleString()}).`,
+        error: tr(
+          language,
+          `Idadi ya samaki (${totalCount.toLocaleString()}) inazidi samaki hai waliopo ${sourcePond.code} (${sourcePond.currentFish.toLocaleString()}).`,
+          `Fish count (${totalCount.toLocaleString()}) exceeds live fish in ${sourcePond.code} (${sourcePond.currentFish.toLocaleString()}).`
+        ),
       };
     }
 
@@ -952,9 +1106,16 @@ export default function App() {
     }));
 
     triggerHaptic(10);
-    showToast(`Manual stock lot ${lotCode} saved (${totalKg.toFixed(1)} kg).`, {
-      undoSnapshot: prevSnapshot,
-    });
+    showToast(
+      tr(
+        language,
+        `Akiba ya mkono ${lotCode} imehifadhiwa (${totalKg.toFixed(1)} kg).`,
+        `Manual stock lot ${lotCode} saved (${totalKg.toFixed(1)} kg).`
+      ),
+      {
+        undoSnapshot: prevSnapshot,
+      }
+    );
     return { ok: true, lotId };
   };
 
@@ -962,13 +1123,24 @@ export default function App() {
     payload: ManualPondStockPayload
   ): { ok: boolean; error?: string } => {
     const pond = state.ponds.find((p) => p.code === payload.pondCode);
-    if (!pond) return { ok: false, error: 'Selected pond was not found.' };
+    if (!pond) {
+      return {
+        ok: false,
+        error: tr(language, 'Bwawa lililochaguliwa halijapatikana.', 'Selected pond was not found.'),
+      };
+    }
     if (pond.currentFish + payload.fishCount > pond.maxCapacity) {
       return {
         ok: false,
-        error: `Capacity guard: ${pond.code} max capacity is ${pond.maxCapacity.toLocaleString()} fish (available space: ${(
-          pond.maxCapacity - pond.currentFish
-        ).toLocaleString()}).`,
+        error: tr(
+          language,
+          `Ulinzi wa ujazo: ${pond.code} uwezo wa juu ni samaki ${pond.maxCapacity.toLocaleString()} (nafasi iliyobaki: ${(
+            pond.maxCapacity - pond.currentFish
+          ).toLocaleString()}).`,
+          `Capacity guard: ${pond.code} max capacity is ${pond.maxCapacity.toLocaleString()} fish (available space: ${(
+            pond.maxCapacity - pond.currentFish
+          ).toLocaleString()}).`
+        ),
       };
     }
 
@@ -1053,9 +1225,16 @@ export default function App() {
     }));
 
     triggerHaptic(10);
-    showToast(`Added ${payload.fishCount.toLocaleString()} fish to ${pond.code} (${batchCode}).`, {
-      undoSnapshot: prevSnapshot,
-    });
+    showToast(
+      tr(
+        language,
+        `Samaki ${payload.fishCount.toLocaleString()} wameongezwa kwenye ${pond.code} (${batchCode}).`,
+        `Added ${payload.fishCount.toLocaleString()} fish to ${pond.code} (${batchCode}).`
+      ),
+      {
+        undoSnapshot: prevSnapshot,
+      }
+    );
     return { ok: true };
   };
 
@@ -1066,10 +1245,20 @@ export default function App() {
   }): { ok: boolean; customer?: Customer; error?: string } => {
     const normalized = normalizeTzPhone(payload.phone);
     if (!payload.name.trim()) {
-      return { ok: false, error: 'Customer name is required.' };
+      return {
+        ok: false,
+        error: tr(language, 'Jina la mteja linahitajika.', 'Customer name is required.'),
+      };
     }
     if (!normalized) {
-      return { ok: false, error: 'Valid Tanzania phone required (e.g. 255712345678).' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Namba sahihi ya simu ya Tanzania inahitajika (mfano 255712345678).',
+          'Valid Tanzania phone required (e.g. 255712345678).'
+        ),
+      };
     }
     const existing = state.customers.find((c) => c.phone === normalized);
     if (existing) {
@@ -1091,7 +1280,7 @@ export default function App() {
       ...prev,
       customers: [customer, ...prev.customers],
     }));
-    showToast(`Added customer ${customer.name}`);
+    showToast(tr(language, `Mteja ${customer.name} ameongezwa.`, `Added customer ${customer.name}`));
     return { ok: true, customer };
   };
 
@@ -1100,14 +1289,35 @@ export default function App() {
   ): { ok: boolean; error?: string } => {
     const perms = getPermissions(state.activeUser.role);
     if (!perms.canManageCustomers && !perms.canRecordSale) {
-      return { ok: false, error: 'Your role cannot register customers.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Wajibu wako hauruhusiwi kusajili wateja.',
+          'Your role cannot register customers.'
+        ),
+      };
     }
     const normalized = normalizeTzPhone(payload.phone);
     if (!normalized) {
-      return { ok: false, error: 'Valid Tanzania phone required (255XXXXXXXXX).' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Namba sahihi ya simu ya Tanzania inahitajika (255XXXXXXXXX).',
+          'Valid Tanzania phone required (255XXXXXXXXX).'
+        ),
+      };
     }
     if (state.customers.some((c) => c.phone === normalized)) {
-      return { ok: false, error: 'A customer with this phone number already exists.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Mteja mwenye namba hii ya simu tayari yupo.',
+          'A customer with this phone number already exists.'
+        ),
+      };
     }
     const newCust: Customer = {
       ...payload,
@@ -1132,7 +1342,9 @@ export default function App() {
         ...prev.auditLogs,
       ],
     }));
-    showToast(`Customer ${newCust.name} registered.`);
+    showToast(
+      tr(language, `Mteja ${newCust.name} amesajiliwa.`, `Customer ${newCust.name} registered.`)
+    );
     return { ok: true };
   };
 
@@ -1141,7 +1353,7 @@ export default function App() {
       ...prev,
       customers: prev.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     }));
-    showToast('Customer profile updated.');
+    showToast(tr(language, 'Taarifa za mteja zimesasishwa.', 'Customer profile updated.'));
   };
 
   const handleSavePriceItem = (payload: Omit<PriceListItem, 'id'> & { id?: string }) => {
@@ -1178,7 +1390,7 @@ export default function App() {
         ],
       };
     });
-    showToast('Price list updated.');
+    showToast(tr(language, 'Orodha ya bei imesasishwa.', 'Price list updated.'));
   };
 
   const handleCreateQuickSale = async (
@@ -1186,7 +1398,14 @@ export default function App() {
   ): Promise<QuickSaleSubmitResult> => {
     const idempotencyKey = (payload.idempotencyKey || '').trim();
     if (!idempotencyKey) {
-      return { ok: false, error: 'Missing transaction key. Re-open Quick Sale and try again.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Ufunguo wa muamala haupo. Fungua tena Uza Haraka na ujaribu.',
+          'Missing transaction key. Re-open Quick Sale and try again.'
+        ),
+      };
     }
 
     if (
@@ -1197,7 +1416,11 @@ export default function App() {
       return {
         ok: false,
         duplicate: true,
-        error: 'Duplicate submission prevented: this sale has already been submitted.',
+        error: tr(
+          language,
+          'Muamala umezuiwa kujirudia: mauzo haya tayari yametumwa.',
+          'Duplicate submission prevented: this sale has already been submitted.'
+        ),
       };
     }
 
@@ -1205,19 +1428,36 @@ export default function App() {
     if (!perms.canRecordSale) {
       return {
         ok: false,
-        error: `Role ${state.activeUser.roleLabel} cannot record sales.`,
+        error: tr(
+          language,
+          `Wajibu wa ${tDomain(language, state.activeUser.roleLabel)} hauwezi kurekodi mauzo.`,
+          `Role ${state.activeUser.roleLabel} cannot record sales.`
+        ),
       };
     }
 
     const customer = state.customers.find((c) => c.id === payload.customerId);
     if (!customer) {
-      return { ok: false, error: 'Selected customer not found.' };
+      return {
+        ok: false,
+        error: tr(language, 'Mteja aliyechaguliwa hajapatikana.', 'Selected customer not found.'),
+      };
     }
     if (!normalizeTzPhone(customer.phone)) {
-      return { ok: false, error: 'Customer phone must be a valid 255XXXXXXXXX number.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Namba ya simu ya mteja lazima iwe sahihi (255XXXXXXXXX).',
+          'Customer phone must be a valid 255XXXXXXXXX number.'
+        ),
+      };
     }
     if (payload.lines.length === 0) {
-      return { ok: false, error: 'Add at least one weighing line.' };
+      return {
+        ok: false,
+        error: tr(language, 'Ongeza angalau mstari mmoja wa uzito wa samaki.', 'Add at least one weighing line.'),
+      };
     }
 
     const subtotalTzs = roundTzs(
@@ -1225,13 +1465,26 @@ export default function App() {
     );
     const discountTzs = Math.max(0, roundTzs(payload.discountTzs));
     if (discountTzs > subtotalTzs) {
-      return { ok: false, error: 'Discount cannot exceed subtotal.' };
+      return {
+        ok: false,
+        error: tr(language, 'Punguzo haliwezi kuzidi jumla ndogo.', 'Discount cannot exceed subtotal.'),
+      };
     }
     if (discountTzs > 0 && !perms.canOverrideSalePrice) {
-      return { ok: false, error: 'Only Owner or Farm Manager can approve discounts.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Ni Mmiliki au Meneja wa Shamba pekee anayeweza kuidhinisha punguzo.',
+          'Only Owner or Farm Manager can approve discounts.'
+        ),
+      };
     }
     if (discountTzs > 0 && !payload.discountReason.trim()) {
-      return { ok: false, error: 'Discount reason is required.' };
+      return {
+        ok: false,
+        error: tr(language, 'Sababu ya punguzo inahitajika.', 'Discount reason is required.'),
+      };
     }
 
     const taxableBase = Math.max(0, subtotalTzs - discountTzs);
@@ -1241,7 +1494,14 @@ export default function App() {
 
     const paidTzs = roundTzs(payload.paidTzs);
     if (paidTzs < 0 || paidTzs > totalTzs) {
-      return { ok: false, error: 'Paid amount must be between TZS 0 and invoice total.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'Kiasi kilicholipwa lazima kiwe kati ya TZS 0 na jumla ya ankara.',
+          'Paid amount must be between TZS 0 and invoice total.'
+        ),
+      };
     }
     const balanceTzs = roundTzs(totalTzs - paidTzs);
 
@@ -1249,13 +1509,24 @@ export default function App() {
     if (balanceTzs > 0 && existingDebt + balanceTzs > customer.creditLimitTzs) {
       return {
         ok: false,
-        error: `Credit limit exceeded for ${customer.name} (limit TZS ${customer.creditLimitTzs.toLocaleString()}).`,
+        error: tr(
+          language,
+          `Kikomo cha mkopo kimezidi kwa ${customer.name} (kikomo TZS ${customer.creditLimitTzs.toLocaleString()}).`,
+          `Credit limit exceeded for ${customer.name} (limit TZS ${customer.creditLimitTzs.toLocaleString()}).`
+        ),
       };
     }
 
     const pinRequired = totalTzs >= state.salesPreferences.pinThresholdTzs || discountTzs > 0;
     if (pinRequired && payload.pin !== state.activeUser.pin) {
-      return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+      return {
+        ok: false,
+        error: tr(
+          language,
+          'PIN ya tarakimu 4 si sahihi. Tafadhali hakikisha PIN yako na ujaribu tena.',
+          'Invalid 4-digit PIN. Please check your PIN and try again.'
+        ),
+      };
     }
 
     // Validate lot stock availability across lines referencing existing lots before contacting backend
@@ -1263,11 +1534,23 @@ export default function App() {
     for (const line of payload.lines) {
       const kg = roundKg(line.kg);
       if (kg <= 0 || line.pricePerKgTzs <= 0) {
-        return { ok: false, error: 'All lines require weight > 0 and price > 0.' };
+        return {
+          ok: false,
+          error: tr(
+            language,
+            'Mistari yote inahitaji uzito > 0 na bei > 0.',
+            'All lines require weight > 0 and price > 0.'
+          ),
+        };
       }
       if (line.sourceType === 'lot' && line.lotId) {
         const lot = state.harvestLots.find((l) => l.id === line.lotId);
-        if (!lot) return { ok: false, error: 'Selected harvest lot not found.' };
+        if (!lot) {
+          return {
+            ok: false,
+            error: tr(language, 'Mavuno (lot) yaliyochaguliwa hayajapatikana.', 'Selected harvest lot not found.'),
+          };
+        }
         if (!lotKgUsage[lot.id]) lotKgUsage[lot.id] = { large: 0, medium: 0, small: 0 };
         const key = line.grade.toLowerCase() as 'large' | 'medium' | 'small';
         lotKgUsage[lot.id][key] = roundKg(lotKgUsage[lot.id][key] + kg);
@@ -1275,13 +1558,24 @@ export default function App() {
         if (lotKgUsage[lot.id][key] > avail) {
           return {
             ok: false,
-            error: `Insufficient ${line.grade} stock in ${lot.lotCode} (${avail.toFixed(2)} kg available).`,
+            error: tr(
+              language,
+              `Akiba ya daraja ${tDomain(language, line.grade)} haitoshi kwenye ${lot.lotCode} (${avail.toFixed(2)} kg zilizopo).`,
+              `Insufficient ${line.grade} stock in ${lot.lotCode} (${avail.toFixed(2)} kg available).`
+            ),
           };
         }
       } else if (line.sourceType === 'pond') {
         const pond = state.ponds.find((p) => p.code === line.pondCode);
         if (!pond || pond.currentFish <= 0) {
-          return { ok: false, error: `No live fish available in ${line.pondCode}.` };
+          return {
+            ok: false,
+            error: tr(
+              language,
+              `Hakuna samaki hai kwenye ${line.pondCode}.`,
+              `No live fish available in ${line.pondCode}.`
+            ),
+          };
         }
       }
     }
@@ -1336,7 +1630,11 @@ export default function App() {
           duplicate: Boolean(confirmData?.duplicate),
           error:
             confirmData?.error ||
-            'Backend confirmation failed — stock was NOT deducted and no harvest lot was created.',
+            tr(
+              language,
+              'Uthibitisho wa seva umeshindikana — akiba HAIJAPUNGUZWA na hakuna lot iliyoundwa.',
+              'Backend confirmation failed — stock was NOT deducted and no harvest lot was created.'
+            ),
         };
       }
 
@@ -1348,8 +1646,11 @@ export default function App() {
     } catch {
       return {
         ok: false,
-        error:
-          'Unable to reach confirmation server — stock was NOT deducted and no harvest lot was created.',
+        error: tr(
+          language,
+          'Seva ya uthibitisho haipatikani — akiba HAIJAPUNGUZWA na hakuna lot iliyoundwa.',
+          'Unable to reach confirmation server — stock was NOT deducted and no harvest lot was created.'
+        ),
       };
     } finally {
       inFlightSaleKeysRef.current.delete(idempotencyKey);
@@ -1627,6 +1928,9 @@ export default function App() {
     };
     });
 
+    setQuickSaleInitialLotId(undefined);
+    setQuickSaleInitialPondCode(undefined);
+    setQuickSalePreOrder(null);
     triggerHaptic(12);
     window.setTimeout(
       () => {
@@ -1634,10 +1938,18 @@ export default function App() {
       },
       effectiveReducedMotion ? 0 : 750
     );
-    showToast(`Invoice ${invoiceNo} created for ${customer.name}.`, {
-      undoSnapshot: prevSnapshot,
-      undoCloseReceipt: true,
-    });
+    showToast(
+      tr(
+        language,
+        `Ankara ${invoiceNo} imeundwa kwa ${customer.name}.`,
+        `Invoice ${invoiceNo} created for ${customer.name}.`
+      ),
+      {
+        kind: 'sale',
+        undoSnapshot: prevSnapshot,
+        undoCloseReceipt: true,
+      }
+    );
     return { ok: true, sale: newSale };
   };
 
@@ -1648,12 +1960,18 @@ export default function App() {
     reference: string;
   }): { ok: boolean; error?: string } => {
     const target = state.sales.find((s) => s.id === payload.saleId);
-    if (!target) return { ok: false, error: 'Invoice not found.' };
+    if (!target) {
+      return { ok: false, error: tr(language, 'Ankara haijapatikana.', 'Invoice not found.') };
+    }
     const amt = roundTzs(payload.amountTzs);
     if (amt <= 0 || amt > target.balanceTzs) {
       return {
         ok: false,
-        error: `Amount must be between TZS 1 and TZS ${target.balanceTzs.toLocaleString()}.`,
+        error: tr(
+          language,
+          `Kiasi lazima kiwe kati ya TZS 1 na TZS ${target.balanceTzs.toLocaleString()}.`,
+          `Amount must be between TZS 1 and TZS ${target.balanceTzs.toLocaleString()}.`
+        ),
       };
     }
 
@@ -1710,9 +2028,17 @@ export default function App() {
       ],
     }));
     triggerHaptic(10);
-    showToast(`Recorded TZS ${amt.toLocaleString()} payment on ${target.invoiceNo}.`, {
-      undoSnapshot: prevSnapshot,
-    });
+    showToast(
+      tr(
+        language,
+        `Malipo ya TZS ${amt.toLocaleString()} yamerekodiwa kwenye ${target.invoiceNo}.`,
+        `Recorded TZS ${amt.toLocaleString()} payment on ${target.invoiceNo}.`
+      ),
+      {
+        kind: 'payment',
+        undoSnapshot: prevSnapshot,
+      }
+    );
     return { ok: true };
   };
 
@@ -1723,7 +2049,14 @@ export default function App() {
       sales: prev.sales.map((s) => (s.id === saleId ? { ...s, deliveryStatus: status } : s)),
     }));
     triggerHaptic(8);
-    showToast(`Delivery status updated to ${status}.`, { undoSnapshot: prevSnapshot });
+    showToast(
+      tr(
+        language,
+        `Hali ya usafirishaji imebadilishwa kuwa ${tDomain(language, status)}.`,
+        `Delivery status updated to ${status}.`
+      ),
+      { undoSnapshot: prevSnapshot }
+    );
   };
 
   const handleAddPreOrder = (
@@ -1739,7 +2072,7 @@ export default function App() {
       ...prev,
       preOrders: [newPo, ...prev.preOrders],
     }));
-    showToast('Pre-order saved.');
+    showToast(tr(language, 'Oda ya awali imehifadhiwa.', 'Pre-order saved.'));
     return { ok: true };
   };
 
@@ -1750,7 +2083,7 @@ export default function App() {
         po.id === id ? { ...po, status: 'Cancelled' as const } : po
       ),
     }));
-    showToast('Pre-order cancelled.');
+    showToast(tr(language, 'Oda ya awali imefutwa.', 'Pre-order cancelled.'));
   };
 
   const navItems: Array<{
@@ -1779,7 +2112,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-[#E9F0F7] text-slate-900 transition-colors duration-200 dark:bg-[#060f1e] dark:text-slate-100">
-      {/* MOBILE OVERLAY */}
+      {/* TABLET COLLAPSIBLE DRAWER OVERLAY */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
@@ -1788,28 +2121,28 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: DURATIONS.base }}
             onClick={() => setMobileMenuOpen(false)}
-            className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-40 hidden bg-slate-950/60 backdrop-blur-[1px] md:block lg:hidden"
           />
         )}
       </AnimatePresence>
 
-      {/* LEFT SIDEBAR (Deep Navy matching brand identity) */}
+      {/* LEFT SIDEBAR (Tablet collapsible drawer + Desktop sticky sidebar) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[236px] shrink-0 flex-col bg-gradient-to-b from-[#081C3A] via-[#061630] to-[#041024] text-white transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 hidden w-[202px] shrink-0 flex-col bg-gradient-to-b from-[#081C3A] via-[#061630] to-[#041024] text-white transition-transform duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:flex lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Brand Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-4 pt-4 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 via-cyan-500 to-emerald-500 shadow-md ring-2 ring-white/20">
-              <Fish className="h-5 w-5 text-white" />
+        <div className="flex items-center justify-between border-b border-white/10 px-3 pt-3 pb-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 via-cyan-500 to-emerald-500 shadow-sm ring-1 ring-white/25">
+              <Fish className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <div className="font-display text-[17px] font-extrabold leading-none tracking-tight text-white">
+            <div className="min-w-0">
+              <div className="truncate font-display text-[15px] font-extrabold leading-none tracking-tight text-white">
                 DukaAquSmart
               </div>
-              <div className="mt-1 text-[9.5px] font-medium leading-tight text-sky-200/80">
+              <div className="mt-0.5 truncate text-[9px] font-medium leading-tight text-sky-200/80">
                 {t.brandTagline}
               </div>
             </div>
@@ -1817,60 +2150,122 @@ export default function App() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            aria-label="Close navigation menu"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"
+            aria-label={tr(language, 'Funga menyu ya pembeni', 'Close navigation menu')}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Navigation Links with layoutId sliding highlight */}
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeNav === item.id;
+            const isFarmsParent = item.id === 'farms-ponds';
+            const showFarmsChildren = isFarmsParent && farmsNavExpanded;
+            const farmsChildren: Array<{ id: FarmsModuleSection; label: string }> = [
+              { id: 'overview', label: tr(language, 'Muhtasari wa Mashamba', 'Farm Overview') },
+              { id: 'map', label: tr(language, 'Ramani ya Shamba', 'Farm Map') },
+              { id: 'register-farm', label: tr(language, 'Sajili Shamba', 'Register Farm') },
+              { id: 'register-pond', label: tr(language, 'Sajili Bwawa / Kizimba', 'Register Pond / Cage') },
+              { id: 'directory', label: tr(language, 'Orodha ya Mabwawa', 'Pond Directory') },
+            ];
+
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveNav(item.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={`relative z-10 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[12.5px] font-medium transition-colors ${
-                  active ? 'text-white' : 'text-slate-200/90 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="sidebar-active-pill"
-                    transition={SPRING_SNAPPY}
-                    className="absolute inset-0 -z-10 rounded-xl bg-[#1D72E8] shadow-sm"
-                  />
-                )}
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <Icon className="h-4 w-4 shrink-0 opacity-90" />
-                  <span className="truncate">{item.label}</span>
-                </span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span
-                    className={`ml-2 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white tabular-nums ${
-                      item.badgeTone === 'red' ? 'bg-red-500' : 'bg-orange-500'
-                    }`}
-                  >
-                    {item.badge}
+              <div key={item.id} className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isFarmsParent) {
+                      if (activeNav === 'farms-ponds') {
+                        setFarmsNavExpanded((prev) => !prev);
+                      } else {
+                        setActiveNav('farms-ponds');
+                        setFarmsNavExpanded(true);
+                        setMobileMenuOpen(false);
+                      }
+                      return;
+                    }
+                    if (item.id === 'harvest-sales') {
+                      setQuickSaleInitialLotId(undefined);
+                      setQuickSaleInitialPondCode(undefined);
+                      setQuickSalePreOrder(null);
+                    }
+                    setActiveNav(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`relative z-10 flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[11.5px] font-medium transition-colors ${
+                    active ? 'text-white' : 'text-slate-200/90 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="sidebar-active-pill"
+                      transition={SPRING_SNAPPY}
+                      className="absolute inset-0 -z-10 rounded-lg bg-[#1D72E8] shadow-sm"
+                    />
+                  )}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                    <span className="truncate">{item.label}</span>
                   </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span
+                        className={`ml-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[9.5px] font-bold text-white tabular-nums ${
+                          item.badgeTone === 'red' ? 'bg-red-500' : 'bg-orange-500'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                    {isFarmsParent && (
+                      <ChevronDown
+                        className={`h-3 w-3 text-white/75 transition-transform duration-150 ${
+                          showFarmsChildren ? 'rotate-180' : ''
+                        }`}
+                      />
+                    )}
+                  </span>
+                </button>
+
+                {showFarmsChildren && (
+                  <div className="ml-4 space-y-0.5 border-l border-white/15 pl-2 py-0.5">
+                    {farmsChildren.map((child) => {
+                      const childActive = active && farmsSubView === child.id;
+                      return (
+                        <button
+                          key={child.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveNav('farms-ponds');
+                            setFarmsSubView(child.id);
+                            setFarmsNavExpanded(true);
+                            setMobileMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center rounded-md px-2 py-1 text-left text-[11px] font-medium whitespace-nowrap transition-colors ${
+                            childActive
+                              ? 'bg-white/15 text-white font-semibold'
+                              : 'text-sky-100/75 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          <span className="truncate">{child.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>
 
-        {/* Language Switcher (Tanzania Flag + EN/SW) */}
-        <div className="border-t border-white/10 px-3 pt-2.5 pb-2">
-          <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5">
-            <div className="flex items-center gap-2">
-              <svg viewBox="0 0 24 16" className="h-3.5 w-5 shrink-0 rounded-[2px]">
+        {/* Language Switcher (Compact) */}
+        <div className="border-t border-white/10 px-2.5 pt-2 pb-1.5">
+          <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-2 py-1">
+            <div className="flex items-center gap-1.5">
+              <svg viewBox="0 0 24 16" className="h-3 w-4.5 shrink-0 rounded-[2px]">
                 <rect width="24" height="16" fill="#1EB53A" />
                 <polygon points="0,16 24,0 24,16" fill="#00A3DD" />
                 <polygon points="0,13 21,0 24,0 24,3 3,16 0,16" fill="#FCD116" />
@@ -1879,34 +2274,34 @@ export default function App() {
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
-                aria-label="Select Language"
-                className="bg-transparent text-xs font-semibold text-white focus:outline-none"
+                aria-label={tr(language, 'Chagua Lugha', 'Select Language')}
+                className="bg-transparent text-[11px] font-semibold text-white focus:outline-none"
               >
-                <option value="en" className="bg-[#081C3A] text-white">
-                  English
-                </option>
                 <option value="sw" className="bg-[#081C3A] text-white">
                   Kiswahili
                 </option>
+                <option value="en" className="bg-[#081C3A] text-white">
+                  English
+                </option>
               </select>
             </div>
-            <ChevronDown className="h-3.5 w-3.5 text-white/60" />
+            <ChevronDown className="h-3 w-3 text-white/60" />
           </div>
         </div>
 
-        {/* User Profile + Interactive Role Switcher */}
-        <div className="relative px-3 pb-3">
+        {/* Compact User Profile + Interactive Role Switcher */}
+        <div className="relative px-2.5 pb-2.5">
           <AnimatePresence>
             {roleMenuOpen && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
-                className="absolute bottom-24 left-3 right-3 z-50 rounded-xl border border-white/15 bg-[#0C254A] p-2 shadow-xl"
+                variants={dropdownMenu}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="absolute bottom-16 left-2.5 right-2.5 z-50 rounded-xl border border-white/15 bg-[#0C254A] p-2 shadow-xl"
               >
                 <div className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-sky-300">
-                  Switch Active Persona
+                  {tr(language, 'Badilisha Mhusika', 'Switch Active Persona')}
                 </div>
                 {state.employees.map((emp) => (
                   <button
@@ -1919,15 +2314,29 @@ export default function App() {
                         : 'text-slate-200 hover:bg-white/10'
                     }`}
                   >
-                    <div>
-                      <div className="font-semibold">{emp.name}</div>
-                      <div className="text-[10px] text-sky-200">{emp.roleLabel}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold">{emp.name}</div>
+                      <div className="truncate text-[10px] text-sky-200">{tDomain(language, emp.roleLabel)}</div>
                     </div>
-                    <span className="text-[10px] text-sky-200/80">
-                      {state.activeUser.id === emp.id ? 'Active' : emp.role}
+                    <span className="ml-1 shrink-0 text-[10px] text-sky-200/80">
+                      {state.activeUser.id === emp.id
+                        ? tr(language, 'Anatumika', 'Active')
+                        : tDomain(language, emp.role)}
                     </span>
                   </button>
                 ))}
+                {!devicePwa.isInstalled && (
+                  <div className="mt-2 border-t border-white/10 pt-2">
+                    <PWAInstallCard
+                      language={language}
+                      platform={devicePwa.platform}
+                      isInstallable={devicePwa.isInstallable}
+                      isInstalled={devicePwa.isInstalled}
+                      onInstall={devicePwa.install}
+                      compact
+                    />
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1935,39 +2344,113 @@ export default function App() {
           <button
             type="button"
             onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-            className="flex w-full items-center gap-2.5 rounded-xl bg-white/10 p-2 text-left transition-colors hover:bg-white/15"
+            title={t.actions.switchRole}
+            className="flex w-full items-center gap-2 rounded-lg bg-white/10 p-1.5 text-left transition-colors hover:bg-white/15"
           >
             <img
               src={state.activeUser.avatarUrl || ASSET_IMAGES.avatar}
               alt={state.activeUser.name}
               referrerPolicy="no-referrer"
-              className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-emerald-400/70"
+              className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-emerald-400/70"
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-bold text-white">{state.activeUser.name}</div>
-              <div className="truncate text-[10px] text-sky-200">{state.activeUser.roleLabel}</div>
-              <div className="flex items-center gap-1 text-[10px] text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Online
-              </div>
+              <div className="truncate text-[11px] font-bold text-white">{state.activeUser.name}</div>
+              <div className="truncate text-[9.5px] text-sky-200">{tDomain(language, state.activeUser.roleLabel)}</div>
             </div>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/70" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10"
-          >
-            <LogOut className="h-3.5 w-3.5" /> {t.actions.switchRole}
+            <LogOut className="h-3.5 w-3.5 shrink-0 text-white/70" />
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT SHELL */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* STICKY TOP SCENIC TANZANIA AQUACULTURE HEADER BANNER */}
+        {/* MOBILE NATIVE TOP APP BAR (< md) */}
+        <header className="pt-safe sticky top-0 z-40 border-b border-white/10 bg-[#081C3A] text-white shadow-sm md:hidden">
+          <div className="flex h-13 items-center justify-between px-3.5">
+            <div className="flex min-w-0 items-center gap-2">
+              {(activeNav !== 'dashboard' || mobileFullWorkspace) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mobileFullWorkspace) {
+                      setMobileFullWorkspace(false);
+                    } else {
+                      setActiveNav('dashboard');
+                    }
+                  }}
+                  aria-label={tr(language, 'Rudi nyuma', 'Go back')}
+                  className="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/90 active:bg-white/10"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => navigateTo('dashboard')}
+                className="flex items-center gap-2 text-left"
+              >
+                <img
+                  src="/icon.svg"
+                  alt="DukaAquSmart"
+                  className="h-7 w-7 shrink-0 rounded-full ring-1 ring-sky-300/40"
+                />
+                <span className="font-display text-[17px] font-extrabold tracking-tight">
+                  <span className="text-white">DukaAqu</span>
+                  <span className="text-sky-400">Smart</span>
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <OfflineStatusPill isOnline={devicePwa.isOnline} language={language} />
+              <PWAInstallButton
+                language={language}
+                platform={devicePwa.platform}
+                isInstallable={devicePwa.isInstallable}
+                isInstalled={devicePwa.isInstalled}
+                onInstall={devicePwa.install}
+                variant="mobile-pill"
+              />
+              <button
+                type="button"
+                onClick={() => navigateTo('tasks-alerts')}
+                aria-label={tr(language, 'Arifa za shamba', 'Notifications')}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full text-white/90 active:bg-white/10"
+              >
+                <Bell className="h-5 w-5" />
+                {openTasksAlertsCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9.5px] font-bold text-white tabular-nums ring-2 ring-[#081C3A]">
+                    {openTasksAlertsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {(state.offlineMode || state.pendingSyncQueue.length > 0 || isSyncing) && (
+            <div className="flex items-center justify-between gap-2 bg-amber-500/20 px-3.5 py-1 text-[10.5px] font-semibold text-amber-100">
+              <span className="truncate">
+                {state.offlineMode
+                  ? t.ui.offlineBanner
+                  : `${state.pendingSyncQueue.length} ${t.ui.pendingQueueLabel}`}
+              </span>
+              {state.pendingSyncQueue.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSyncNow}
+                  disabled={isSyncing}
+                  className="shrink-0 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-slate-950"
+                >
+                  {isSyncing ? t.ui.syncingNow : t.ui.syncNow}
+                </button>
+              )}
+            </div>
+          )}
+        </header>
+
+        {/* STICKY TOP SCENIC TANZANIA AQUACULTURE HEADER BANNER (Tablet & Desktop) */}
         <header
-          className={`sticky top-0 z-30 border-b border-slate-200/80 bg-white transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900 ${
+          className={`sticky top-0 z-30 hidden border-b border-slate-200/80 bg-white transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900 md:block ${
             isScrolled ? 'shadow-md dark:shadow-slate-950/60' : ''
           }`}
         >
@@ -1986,7 +2469,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                aria-label="Open menu"
+                aria-label={tr(language, 'Fungua menyu', 'Open menu')}
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white/95 text-slate-700 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 lg:hidden"
               >
                 <Menu className="h-4 w-4" />
@@ -2005,7 +2488,7 @@ export default function App() {
             <div className="relative z-10 flex flex-wrap items-center gap-1.5 sm:gap-2">
               <div className="hidden items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 md:flex">
                 <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-sky-400" />
-                <span>Tue, 19 Nov 2026</span>
+                <span>{tr(language, 'Jumanne, 19 Nov 2026', 'Tue, 19 Nov 2026')}</span>
               </div>
 
               <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200">
@@ -2013,7 +2496,7 @@ export default function App() {
                 <select
                   value={selectedFarmId}
                   onChange={(e) => setSelectedFarmId(e.target.value)}
-                  aria-label="Select Farm Location"
+                  aria-label={tr(language, 'Chagua Eneo la Shamba', 'Select Farm Location')}
                   className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none dark:text-slate-100"
                 >
                   {state.farms.map((f) => (
@@ -2022,7 +2505,7 @@ export default function App() {
                     </option>
                   ))}
                   <option value="all" className="dark:bg-slate-900">
-                    All Tanzania Farms
+                    {tr(language, 'Mashamba Yote Tanzania', 'All Tanzania Farms')}
                   </option>
                 </select>
               </div>
@@ -2050,7 +2533,7 @@ export default function App() {
                   key={`bell-${bellPulseKey}`}
                   type="button"
                   onClick={() => setNotifOpen(!notifOpen)}
-                  aria-label="Notifications"
+                  aria-label={tr(language, 'Arifa za shamba', 'Notifications')}
                   initial={bellPulseKey > 0 ? { scale: 1, rotate: 0 } : false}
                   animate={
                     bellPulseKey > 0 && !effectiveReducedMotion
@@ -2076,14 +2559,14 @@ export default function App() {
                 <AnimatePresence>
                   {notifOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                      transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
+                      variants={dropdownMenu}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
                       className="absolute right-0 top-11 z-50 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-modal dark:border-slate-800 dark:bg-slate-900"
                     >
                       <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
-                        <span>Farm Alerts ({openTasksAlertsCount})</span>
+                        <span>{tr(language, `Tahadhari za Shamba (${openTasksAlertsCount})`, `Farm Alerts (${openTasksAlertsCount})`)}</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -2092,7 +2575,7 @@ export default function App() {
                           }}
                           className="text-blue-600 hover:underline dark:text-sky-400"
                         >
-                          Open Center
+                          {tr(language, 'Fungua Kituo', 'Open Center')}
                         </button>
                       </div>
                       <div className="space-y-2">
@@ -2121,10 +2604,21 @@ export default function App() {
                 </AnimatePresence>
               </div>
 
+              <OfflineStatusPill isOnline={devicePwa.isOnline} language={language} />
+
+              <PWAInstallButton
+                language={language}
+                platform={devicePwa.platform}
+                isInstallable={devicePwa.isInstallable}
+                isInstalled={devicePwa.isInstalled}
+                onInstall={devicePwa.install}
+                variant="header"
+              />
+
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                aria-label="Toggle Fullscreen"
+                aria-label={tr(language, 'Skrini nzima', 'Toggle Fullscreen')}
                 className="hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-200/90 bg-white/95 text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-200 dark:hover:bg-slate-700 sm:flex"
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -2152,7 +2646,7 @@ export default function App() {
                     </span>
                     {state.pendingSyncQueue.length > 0 && (
                       <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900 tabular-nums dark:bg-amber-900 dark:text-amber-200">
-                        {state.pendingSyncQueue.length} queued
+                        {state.pendingSyncQueue.length} {tr(language, 'foleni', 'queued')}
                       </span>
                     )}
                   </div>
@@ -2188,21 +2682,33 @@ export default function App() {
               key={toastState.id}
               role="status"
               aria-live="polite"
-              initial={{ opacity: 0, y: 16, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.96 }}
-              transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
+              initial={{ opacity: 0, x: 18, y: 8, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 14, y: 6, scale: 0.96 }}
+              transition={{ duration: DURATIONS.dropdown, ease: EASE_OUT }}
               className="no-print fixed inset-x-3 bottom-20 z-[1100] flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-950/95 px-4 py-2.5 text-xs font-semibold text-white shadow-modal backdrop-blur-xs sm:inset-x-auto sm:top-4 sm:right-5 sm:bottom-auto sm:max-w-md"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                {toastState.kind === 'sale' ? (
+                  <ShoppingBag className="h-4 w-4 shrink-0 text-sky-400" />
+                ) : toastState.kind === 'stock' ? (
+                  <Package className="h-4 w-4 shrink-0 text-amber-400" />
+                ) : toastState.kind === 'payment' ? (
+                  <Coins className="h-4 w-4 shrink-0 text-emerald-400" />
+                ) : toastState.kind === 'alert' ? (
+                  <Bell className="h-4 w-4 shrink-0 text-orange-400" />
+                ) : toastState.kind === 'info' ? (
+                  <RefreshCw className="h-4 w-4 shrink-0 text-sky-300" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                )}
                 <span className="truncate">{toastState.message}</span>
               </div>
               {toastState.undoSnapshot && (
                 <button
                   type="button"
                   onClick={handleUndoToast}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-white/25"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold text-emerald-200 transition-colors duration-150 hover:bg-white/25"
                 >
                   <RotateCcw className="h-3 w-3" /> {t.ui.undo}
                 </button>
@@ -2212,15 +2718,94 @@ export default function App() {
         </AnimatePresence>
 
         {/* MAIN VIEWPORT WITH PAGE CROSS-FADE */}
-        <main className="flex-1 p-3.5 pb-24 sm:p-4 lg:pb-4">
+        <main className="flex-1 px-3.5 pt-3.5 pb-24 sm:p-5 lg:px-7 lg:py-6 lg:pb-6">
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeNav}
+              key={`${activeNav}-${devicePwa.isMobile && !mobileFullWorkspace ? 'mob' : 'full'}`}
               variants={fadeUp}
               initial="initial"
               animate="animate"
               exit="exit"
             >
+              {devicePwa.isMobile && mobileFullWorkspace && MOBILE_SHOWCASE_NAVS.has(activeNav) && (
+                <div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                  <button
+                    type="button"
+                    onClick={() => setMobileFullWorkspace(false)}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 text-xs font-bold text-[#1D72E8] dark:text-sky-400"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>{tr(language, 'Rudi Mwonekano wa Simu', 'Back to Mobile Summary')}</span>
+                  </button>
+                  <span className="text-[10.5px] font-semibold text-slate-400">
+                    {tr(language, 'Modi Kamili', 'Full Workspace')}
+                  </span>
+                </div>
+              )}
+
+              {devicePwa.isMobile && !mobileFullWorkspace && MOBILE_SHOWCASE_NAVS.has(activeNav) ? (
+                <MobileAppScreens
+                  activeNav={activeNav}
+                  state={state}
+                  language={language}
+                  selectedFarmId={selectedFarmId}
+                  onSelectFarmId={setSelectedFarmId}
+                  onNavigate={(nav) => navigateTo(nav)}
+                  onOpenMore={() => setMobileMoreOpen(true)}
+                  onQuickAction={setQuickAction}
+                  onOpenQuickSale={openQuickSaleModal}
+                  onSelectPondQr={setSelectedPondQr}
+                  onViewInvoice={(sale) => setActiveReceiptSaleId(sale.id)}
+                  onCompleteTask={(taskId) => {
+                    const prevSnapshot = state;
+                    setState((prev) => ({
+                      ...prev,
+                      tasks: prev.tasks.map((tk) =>
+                        tk.id === taskId ? { ...tk, status: 'Completed' } : tk
+                      ),
+                    }));
+                    triggerHaptic(10);
+                    showToast(tr(language, 'Kazi imekamilika.', 'Task marked completed.'), {
+                      undoSnapshot: prevSnapshot,
+                    });
+                  }}
+                  onAcknowledgeAlert={(alertId) => {
+                    const prevSnapshot = state;
+                    setState((prev) => ({
+                      ...prev,
+                      alerts: prev.alerts.map((al) =>
+                        al.id === alertId ? { ...al, acknowledged: true } : al
+                      ),
+                    }));
+                    triggerHaptic(8);
+                    showToast(tr(language, 'Tahadhari imethibitishwa.', 'Alert acknowledged.'), {
+                      kind: 'alert',
+                      undoSnapshot: prevSnapshot,
+                    });
+                  }}
+                  onToggleAerator={(pondId) => {
+                    setState((prev) => ({
+                      ...prev,
+                      ponds: prev.ponds.map((p) =>
+                        p.id === pondId ? { ...p, aeratorRelayOn: !p.aeratorRelayOn } : p
+                      ),
+                    }));
+                    showToast(
+                      tr(language, 'Hali ya kipulizia hewa imesasishwa.', 'Aerator relay state updated.')
+                    );
+                  }}
+                  onOpenFullWorkspace={(section) => {
+                    if (section) setFarmsSubView(section);
+                    setMobileFullWorkspace(true);
+                  }}
+                  onRestockItem={(itemId) => openInventoryModal(itemId)}
+                  platform={devicePwa.platform}
+                  isInstallable={devicePwa.isInstallable}
+                  isInstalled={devicePwa.isInstalled}
+                  onInstallApp={devicePwa.install}
+                />
+              ) : (
+                <>
               {activeNav === 'dashboard' && (
                 <DashboardView
                   state={state}
@@ -2237,7 +2822,10 @@ export default function App() {
                       alerts: prev.alerts.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)),
                     }));
                     triggerHaptic(8);
-                    showToast('Alert acknowledged.', { undoSnapshot: prevSnapshot });
+                    showToast(tr(language, 'Tahadhari imethibitishwa.', 'Alert acknowledged.'), {
+                      kind: 'alert',
+                      undoSnapshot: prevSnapshot,
+                    });
                   }}
                 />
               )}
@@ -2246,12 +2834,22 @@ export default function App() {
             <FarmPondsModule
               state={state}
               selectedFarmId={selectedFarmId}
+              activeSection={farmsSubView}
+              onSectionChange={setFarmsSubView}
+              onSelectFarmId={setSelectedFarmId}
               onSelectPondQr={setSelectedPondQr}
               onSaveFarmLocation={(payload) => {
                 if (
                   state.farms.some((f) => f.name.toLowerCase() === payload.name.toLowerCase())
                 ) {
-                  return { ok: false, error: `Farm "${payload.name}" already exists.` };
+                  return {
+                    ok: false,
+                    error: tr(
+                      language,
+                      `Shamba "${payload.name}" tayari lipo.`,
+                      `Farm "${payload.name}" already exists.`
+                    ),
+                  };
                 }
                 const newFarmId = `farm-${Date.now()}`;
                 setState((prev) => ({
@@ -2292,7 +2890,13 @@ export default function App() {
                     ...prev.auditLogs,
                   ],
                 }));
-                showToast(`Farm "${payload.name}" located and saved.`);
+                showToast(
+                  tr(
+                    language,
+                    `Shamba "${payload.name}" limewekwa kwenye ramani na kuhifadhiwa.`,
+                    `Farm "${payload.name}" located and saved.`
+                  )
+                );
                 return { ok: true, farmId: newFarmId };
               }}
               onToggleAerator={(pondId) => {
@@ -2302,7 +2906,9 @@ export default function App() {
                     p.id === pondId ? { ...p, aeratorRelayOn: !p.aeratorRelayOn } : p
                   ),
                 }));
-                showToast('Aerator relay state updated.');
+                showToast(
+                  tr(language, 'Hali ya kipulizia hewa imesasishwa.', 'Aerator relay state updated.')
+                );
               }}
               onAddInfrastructureMarker={(m) => {
                 const newMarker = {
@@ -2333,7 +2939,13 @@ export default function App() {
                     ...prev.auditLogs,
                   ],
                 }));
-                showToast(`Mapped ${m.label} on farm map.`);
+                showToast(
+                  tr(
+                    language,
+                    `${m.label} imewekwa kwenye ramani ya shamba.`,
+                    `Mapped ${m.label} on farm map.`
+                  )
+                );
               }}
               onSavePondGis={(payload) => {
                 if (payload.editingPondId) {
@@ -2404,12 +3016,25 @@ export default function App() {
                       ],
                     };
                   });
-                  showToast(`Updated boundary for ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`);
+                  showToast(
+                    tr(
+                      language,
+                      `Mpaka wa ${payload.code} umesasishwa (${payload.areaSqm.toLocaleString()} m²).`,
+                      `Updated boundary for ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`
+                    )
+                  );
                   return { ok: true };
                 }
 
                 if (state.ponds.some((p) => p.code.toLowerCase() === payload.code.toLowerCase())) {
-                  return { ok: false, error: `Pond code ${payload.code} already exists.` };
+                  return {
+                    ok: false,
+                    error: tr(
+                      language,
+                      `Namba ya bwawa ${payload.code} tayari ipo.`,
+                      `Pond code ${payload.code} already exists.`
+                    ),
+                  };
                 }
 
                 const newPondId = `pond-${Date.now()}`;
@@ -2482,7 +3107,13 @@ export default function App() {
                     ...prev.auditLogs,
                   ],
                 }));
-                showToast(`Saved ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`);
+                showToast(
+                  tr(
+                    language,
+                    `${payload.code} imehifadhiwa (${payload.areaSqm.toLocaleString()} m²).`,
+                    `Saved ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`
+                  )
+                );
                 return { ok: true };
               }}
             />
@@ -2493,11 +3124,17 @@ export default function App() {
               state={state}
               onStockNewBatch={(payload) => {
                 const pond = state.ponds.find((p) => p.code === payload.pondCode);
-                if (!pond) return { ok: false, error: 'Pond not found.' };
+                if (!pond) {
+                  return { ok: false, error: tr(language, 'Bwawa halijapatikana.', 'Pond not found.') };
+                }
                 if (pond.currentFish + payload.count > pond.maxCapacity) {
                   return {
                     ok: false,
-                    error: `Capacity guard triggered: ${pond.code} max capacity is ${pond.maxCapacity.toLocaleString()} fish. Available space is ${(pond.maxCapacity - pond.currentFish).toLocaleString()}.`,
+                    error: tr(
+                      language,
+                      `Ulinzi wa ujazo umeanza: uwezo wa juu wa ${pond.code} ni samaki ${pond.maxCapacity.toLocaleString()}. Nafasi iliyobaki ni ${(pond.maxCapacity - pond.currentFish).toLocaleString()}.`,
+                      `Capacity guard triggered: ${pond.code} max capacity is ${pond.maxCapacity.toLocaleString()} fish. Available space is ${(pond.maxCapacity - pond.currentFish).toLocaleString()}.`
+                    ),
                   };
                 }
                 const sp = state.speciesCatalogue.find((s) => s.commonName === payload.species);
@@ -2556,15 +3193,31 @@ export default function App() {
               }}
               onTransferBatch={(payload) => {
                 if (payload.pin !== state.activeUser.pin) {
-                  return { ok: false, error: 'Invalid 4-digit PIN. Please check your PIN and try again.' };
+                  return {
+                    ok: false,
+                    error: tr(
+                      language,
+                      'PIN ya tarakimu 4 si sahihi. Tafadhali hakikisha PIN yako na ujaribu tena.',
+                      'Invalid 4-digit PIN. Please check your PIN and try again.'
+                    ),
+                  };
                 }
                 const batch = state.batches.find((b) => b.id === payload.batchId);
                 const destPond = state.ponds.find((p) => p.code === payload.toPondCode);
-                if (!batch || !destPond) return { ok: false, error: 'Batch or destination pond not found.' };
+                if (!batch || !destPond) {
+                  return {
+                    ok: false,
+                    error: tr(language, 'Kundi au bwawa lengwa halijapatikana.', 'Batch or destination pond not found.'),
+                  };
+                }
                 if (destPond.currentFish + payload.fishCount > destPond.maxCapacity) {
                   return {
                     ok: false,
-                    error: `Destination capacity guard: ${destPond.code} max capacity is ${destPond.maxCapacity.toLocaleString()}.`,
+                    error: tr(
+                      language,
+                      `Ulinzi wa ujazo wa bwawa lengwa: uwezo wa juu wa ${destPond.code} ni samaki ${destPond.maxCapacity.toLocaleString()}.`,
+                      `Destination capacity guard: ${destPond.code} max capacity is ${destPond.maxCapacity.toLocaleString()}.`
+                    ),
                   };
                 }
                 setState((prev) => ({
@@ -2684,7 +3337,13 @@ export default function App() {
                     ...prev.auditLogs,
                   ],
                 }));
-                showToast('Feed variance resolved and logged in audit trail.');
+                showToast(
+                  tr(
+                    language,
+                    'Tofauti ya chakula imetatuliwa na kurekodiwa kwenye ukaguzi.',
+                    'Feed variance resolved and logged in audit trail.'
+                  )
+                );
               }}
             />
           )}
@@ -2700,7 +3359,7 @@ export default function App() {
                     p.id === pondId ? { ...p, aeratorRelayOn: !p.aeratorRelayOn } : p
                   ),
                 }));
-                showToast('Aerator relay toggled.');
+                showToast(tr(language, 'Kipulizia hewa kimewashwa/kuzimwa.', 'Aerator relay toggled.'));
               }}
               onSimulateEsp32Drop={() => {
                 handleRecordWater({
@@ -2738,7 +3397,13 @@ export default function App() {
                       : h
                   ),
                 }));
-                showToast('Technician verification saved; awaiting Manager approval.');
+                showToast(
+                  tr(
+                    language,
+                    'Uthibitisho wa mtaalamu umehifadhiwa; inasubiri idhini ya Meneja.',
+                    'Technician verification saved; awaiting Manager approval.'
+                  )
+                );
               }}
               onApproveTreatment={(id) => {
                 setState((prev) => ({
@@ -2753,7 +3418,7 @@ export default function App() {
                       : h
                   ),
                 }));
-                showToast('Treatment plan approved.');
+                showToast(tr(language, 'Mpango wa matibabu umeidhinishwa.', 'Treatment plan approved.'));
               }}
             />
           )}
@@ -2762,8 +3427,14 @@ export default function App() {
             <SalesModule
               state={state}
               language={language}
+              initialWizardLotId={quickSaleInitialLotId}
+              initialWizardPondCode={quickSaleInitialPondCode}
+              initialWizardPreOrder={quickSalePreOrder}
+              wizardTriggerKey={saleWizardTriggerKey}
               onQuickAction={setQuickAction}
               onOpenQuickSale={openQuickSaleModal}
+              onQuickCreateCustomer={handleQuickCreateCustomer}
+              onSubmitSale={handleCreateQuickSale}
               onBackToMenu={() => setActiveNav('dashboard')}
               onOpenFishStock={() => setActiveNav('fish-stock')}
               onViewInvoice={(sale) => setActiveReceiptSaleId(sale.id)}
@@ -2808,7 +3479,9 @@ export default function App() {
                   ),
                 }));
                 triggerHaptic(10);
-                showToast('Task marked completed.', { undoSnapshot: prevSnapshot });
+                showToast(tr(language, 'Kazi imekamilika.', 'Task marked completed.'), {
+                  undoSnapshot: prevSnapshot,
+                });
               }}
               onAcknowledgeAlert={(alertId) => {
                 const prevSnapshot = state;
@@ -2819,7 +3492,9 @@ export default function App() {
                   ),
                 }));
                 triggerHaptic(8);
-                showToast('Alert acknowledged.', { undoSnapshot: prevSnapshot });
+                showToast(tr(language, 'Tahadhari imethibitishwa.', 'Alert acknowledged.'), {
+                  undoSnapshot: prevSnapshot,
+                });
               }}
             />
           )}
@@ -2837,15 +3512,19 @@ export default function App() {
                 setState((prev) => ({ ...prev, offlineMode: !prev.offlineMode }))
               }
               onSyncNow={handleSyncNow}
-              onExportAll={() => showToast('Backup CSV exported.')}
+              onExportAll={() =>
+                showToast(tr(language, 'Nakala ya CSV imepakuliwa.', 'Backup CSV exported.'))
+              }
             />
           )}
+                </>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
 
-        {/* BOTTOM TANZANIA VALUE BANNER FOOTER */}
-        <footer className="mt-auto mb-14 flex flex-wrap items-center justify-between overflow-hidden bg-gradient-to-r from-[#081D3D] via-[#0B2954] to-[#0D3366] text-white lg:mb-0">
+        {/* BOTTOM TANZANIA VALUE BANNER FOOTER (Tablet & Desktop) */}
+        <footer className="mt-auto hidden flex-wrap items-center justify-between overflow-hidden bg-gradient-to-r from-[#081D3D] via-[#0B2954] to-[#0D3366] text-white md:flex">
           <div className="flex flex-wrap items-center gap-6 px-5 py-2.5 text-xs font-semibold text-slate-100">
             <span className="flex items-center gap-2">
               <Fish className="h-4 w-4 text-sky-300" /> {t.footer.p1}
@@ -2876,130 +3555,53 @@ export default function App() {
         </footer>
       </div>
 
-      {/* MOBILE FLOATING "+" QUICK-ADD FAB */}
-      <div className="no-print lg:hidden">
-        <AnimatePresence>
-          {fabOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: DURATIONS.fast }}
-                onClick={() => setFabOpen(false)}
-                className="fixed inset-0 z-40 bg-slate-950/35"
-              />
-              <motion.div
-                initial={{ opacity: 0, y: 12, scale: 0.92 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.92 }}
-                transition={SPRING_SNAPPY}
-                className="fixed right-3.5 bottom-32 z-50 flex flex-col items-end gap-2"
-              >
-                {[
-                  {
-                    label: t.actions.quickSale,
-                    tone: 'bg-emerald-600 text-white',
-                    onClick: () => openQuickSaleModal(),
-                  },
-                  {
-                    label: t.actions.recordFeeding,
-                    tone: 'bg-[#1D72E8] text-white',
-                    onClick: () => {
-                      setFabOpen(false);
-                      setQuickAction('feeding');
-                    },
-                  },
-                  {
-                    label: t.actions.recordWaterQuality,
-                    tone: 'bg-cyan-600 text-white',
-                    onClick: () => {
-                      setFabOpen(false);
-                      setQuickAction('water');
-                    },
-                  },
-                  {
-                    label: t.actions.planHarvest,
-                    tone: 'bg-amber-600 text-white',
-                    onClick: () => openHarvestModal(),
-                  },
-                  {
-                    label: t.actions.addInventory,
-                    tone: 'bg-slate-800 text-white dark:bg-slate-700',
-                    onClick: () => openInventoryModal(),
-                  },
-                ].map((act) => (
-                  <button
-                    key={act.label}
-                    type="button"
-                    onClick={act.onClick}
-                    className={`min-h-[40px] rounded-full px-4 py-2 text-xs font-bold shadow-lg ${act.tone}`}
-                  >
-                    {act.label}
-                  </button>
-                ))}
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-
-        <motion.button
-          type="button"
-          onClick={() => {
-            triggerHaptic(8);
-            setFabOpen((prev) => !prev);
-          }}
-          whileTap={{ scale: 0.92 }}
-          animate={{ rotate: fabOpen ? 45 : 0 }}
-          transition={SPRING_SNAPPY}
-          aria-label="Quick add action"
-          className="fixed right-3.5 bottom-[70px] z-50 flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-white shadow-lg ring-2 ring-white dark:ring-slate-900"
-        >
-          <Plus className="h-5 w-5" />
-        </motion.button>
-      </div>
-
-      {/* MOBILE BOTTOM NAVIGATION BAR (Feed, Water, Sale, Mortality, Tasks) */}
+      {/* MOBILE 5-TAB BOTTOM NAVIGATION BAR (Home, Farms, Stock, Sales, More) */}
       <nav
-        aria-label="Mobile quick actions navigation"
-        className="no-print pb-safe fixed inset-x-0 bottom-0 z-40 grid h-14 grid-cols-5 border-t border-slate-200/90 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
+        aria-label={tr(language, 'Menyu kuu ya simu', 'Mobile primary navigation')}
+        className="no-print pb-safe fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-slate-200/90 bg-white/95 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 md:hidden"
       >
         {[
           {
-            id: 'feed',
-            label: t.ui.mobileFeed,
-            icon: Utensils,
-            active: quickAction === 'feeding' || activeNav === 'feeding',
-            onClick: () => setQuickAction('feeding'),
+            id: 'home',
+            label: tr(language, 'Nyumbani', 'Home'),
+            icon: LayoutDashboard,
+            active: !mobileMoreOpen && activeNav === 'dashboard',
+            onClick: () => navigateTo('dashboard'),
           },
           {
-            id: 'water',
-            label: t.ui.mobileWater,
-            icon: Droplets,
-            active: quickAction === 'water' || activeNav === 'water-quality',
-            onClick: () => setQuickAction('water'),
+            id: 'farms',
+            label: tr(language, 'Mashamba', 'Farms'),
+            icon: MapPin,
+            active: !mobileMoreOpen && activeNav === 'farms-ponds',
+            onClick: () => navigateTo('farms-ponds'),
           },
           {
-            id: 'sale',
-            label: t.ui.mobileSale,
+            id: 'stock',
+            label: tr(language, 'Akiba', 'Stock'),
+            icon: Fish,
+            active: !mobileMoreOpen && (activeNav === 'fish-stock' || activeNav === 'fish-species'),
+            onClick: () => navigateTo('fish-stock'),
+          },
+          {
+            id: 'sales',
+            label: tr(language, 'Mauzo', 'Sales'),
             icon: ShoppingBag,
-            active: quickSaleOpen || activeNav === 'harvest-sales',
-            onClick: () => openQuickSaleModal(),
+            active: !mobileMoreOpen && activeNav === 'harvest-sales',
+            onClick: () => navigateTo('harvest-sales'),
           },
           {
-            id: 'mortality',
-            label: t.ui.mobileMortality,
-            icon: HeartPulse,
-            active: quickAction === 'mortality' || activeNav === 'fish-health',
-            onClick: () => setQuickAction('mortality'),
-          },
-          {
-            id: 'tasks',
-            label: t.ui.mobileTasks,
-            icon: Bell,
+            id: 'more',
+            label: tr(language, 'Zaidi', 'More'),
+            icon: MoreHorizontal,
             badge: openTasksAlertsCount,
-            active: activeNav === 'tasks-alerts',
-            onClick: () => setActiveNav('tasks-alerts'),
+            active:
+              mobileMoreOpen ||
+              (activeNav !== 'dashboard' &&
+                activeNav !== 'farms-ponds' &&
+                activeNav !== 'fish-stock' &&
+                activeNav !== 'fish-species' &&
+                activeNav !== 'harvest-sales'),
+            onClick: () => setMobileMoreOpen(true),
           },
         ].map((item) => {
           const Icon = item.icon;
@@ -3008,7 +3610,7 @@ export default function App() {
               key={item.id}
               type="button"
               onClick={item.onClick}
-              className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
+              className={`relative flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[10.5px] font-bold transition-colors ${
                 item.active
                   ? 'text-[#1D72E8] dark:text-sky-400'
                   : 'text-slate-500 dark:text-slate-400'
@@ -3018,22 +3620,40 @@ export default function App() {
                 <motion.span
                   layoutId="mobile-bottom-active"
                   transition={SPRING_SNAPPY}
-                  className="absolute top-0 h-0.5 w-8 rounded-full bg-[#1D72E8] dark:bg-sky-400"
+                  className="absolute top-0 h-[3px] w-9 rounded-full bg-[#1D72E8] dark:bg-sky-400"
                 />
               )}
               <div className="relative">
-                <Icon className="h-4 w-4" />
+                <Icon className="h-5 w-5" />
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="absolute -top-1.5 -right-2 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white tabular-nums">
+                  <span className="absolute -top-1 -right-2 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-600 px-1 text-[8.5px] font-bold text-white tabular-nums">
                     {item.badge}
                   </span>
                 )}
               </div>
-              <span>{item.label}</span>
+              <span className="truncate">{item.label}</span>
             </button>
           );
         })}
       </nav>
+
+      <MobileMoreSheet
+        open={mobileMoreOpen}
+        onClose={() => setMobileMoreOpen(false)}
+        state={state}
+        language={language}
+        themeMode={themeMode}
+        onCycleTheme={cycleThemeMode}
+        onChangeLanguage={setLanguage}
+        onNavigate={(nav) => navigateTo(nav)}
+        onSwitchUser={handleSwitchUser}
+        onSyncNow={handleSyncNow}
+        isSyncing={isSyncing}
+        platform={devicePwa.platform}
+        isInstallable={devicePwa.isInstallable}
+        isInstalled={devicePwa.isInstalled}
+        onInstallApp={devicePwa.install}
+      />
 
       {/* MODALS */}
       <QuickActionModals
@@ -3052,24 +3672,6 @@ export default function App() {
         onReportMortality={handleReportMortality}
         onRecordHarvest={handleRecordHarvest}
         onOpenQuickSaleForLot={(lotId) => openQuickSaleModal({ lotId })}
-      />
-
-      <QuickSaleFlow
-        open={quickSaleOpen}
-        state={state}
-        language={language}
-        initialLotId={quickSaleInitialLotId}
-        initialPondCode={quickSaleInitialPondCode}
-        initialPreOrder={quickSalePreOrder}
-        onClose={() => {
-          setQuickSaleOpen(false);
-          setQuickSaleInitialLotId(undefined);
-          setQuickSaleInitialPondCode(undefined);
-          setQuickSalePreOrder(null);
-        }}
-        onBackToMenu={() => setActiveNav('dashboard')}
-        onQuickCreateCustomer={handleQuickCreateCustomer}
-        onSubmitSale={handleCreateQuickSale}
       />
 
       <InvoiceReceiptModal

@@ -11,6 +11,8 @@ import {
   Undo2,
 } from 'lucide-react';
 import { GpsTrackPoint, Pond } from '../../types/aquaculture';
+import { useLanguage } from '../../ui';
+import { tr } from '../../i18n/translations';
 import { measureAndValidatePolygon } from '../../utils/gisGeometry';
 
 const GPS_WALK_DRAFT_KEY = 'dukaaqusmart_gps_walk_draft_v1';
@@ -47,6 +49,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
   onLiveTrackChange,
   onFinishPolygon,
 }) => {
+  const { language } = useLanguage();
   const [targetAccuracyM, setTargetAccuracyM] = useState<number>(10);
   const [status, setStatus] = useState<'idle' | 'recording' | 'paused'>('idle');
   const [track, setTrack] = useState<GpsTrackPoint[]>([]);
@@ -117,7 +120,13 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
       if (statusRef.current === 'recording') {
         stopWatch();
         setStatus('paused');
-        setWarningMsg('GPS signal paused (no update for 15s). Move to open sky and tap Resume.');
+        setWarningMsg(
+          tr(
+            language,
+            'Mawimbi ya GPS yamesimama (hakuna sasisho kwa sekunde 15). Sogeza sehemu ya wazi kisha gusa Endelea kurekodi.',
+            'GPS signal paused (no update for 15s). Move to open sky and tap Resume.'
+          )
+        );
       }
     }, 15000);
   };
@@ -126,7 +135,13 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
     setErrorMsg('');
     setWarningMsg('');
     if (!navigator.geolocation) {
-      setErrorMsg('GPS is not supported on this device/browser. Use "Adjust on map" instead.');
+      setErrorMsg(
+        tr(
+          language,
+          'GPS haitumiki kwenye kifaa/kivinjari hiki. Tumia "Gusa kwenye Satelaiti" badala yake.',
+          'GPS is not supported on this device/browser. Use "Adjust on map" instead.'
+        )
+      );
       return;
     }
     setStatus('recording');
@@ -149,7 +164,9 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
         // Safeguard 1: Poor GPS accuracy -> ask user to wait instead of adding noisy points
         if (acc > targetAccRef.current) {
           setWarningMsg(
-            `GPS accuracy is ±${acc} m (target ≤ ${targetAccRef.current} m). Stand still for a moment until signal improves, or tap "Capture point".`
+            language === 'sw'
+              ? `Usahihi wa GPS ni ±${acc} m (lengo ≤ ${targetAccRef.current} m). Subiri kidogo hadi mawimbi yaimarike, au gusa "+ Rekodi nukta".`
+              : `GPS accuracy is ±${acc} m (target ≤ ${targetAccRef.current} m). Stand still for a moment until signal improves, or tap "Capture point".`
           );
           return;
         }
@@ -176,13 +193,23 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
 
         // Safeguard 3: Reject sudden unrealistic GPS jumps (> 35m in < 2s or > 12 m/s)
         if ((distM > 35 && elapsedSec < 2.5) || speedMs > 12) {
-          setWarningMsg(`Ignored sudden GPS jump (${Math.round(distM)} m). Keep walking along the edge.`);
+          setWarningMsg(
+            language === 'sw'
+              ? `Mruko wa ghafla wa GPS (${Math.round(distM)} m) umepuuzwa. Endelea kutembea kando ya ukingo.`
+              : `Ignored sudden GPS jump (${Math.round(distM)} m). Keep walking along the edge.`
+          );
           return;
         }
 
         // Safeguard 4: Warn if user walks too quickly (> 2.5 m/s)
         if (speedMs > 2.5) {
-          setWarningMsg('Walking a bit fast — walk slowly along the pond bank for an accurate shape.');
+          setWarningMsg(
+            tr(
+              language,
+              'Unatembea haraka sana — tembea polepole kuzunguka ukingo wa bwawa ili kupata umbo sahihi.',
+              'Walking a bit fast — walk slowly along the pond bank for an accurate shape.'
+            )
+          );
         } else {
           setWarningMsg('');
         }
@@ -194,8 +221,16 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
         setStatus('paused');
         setErrorMsg(
           err.code === err.PERMISSION_DENIED
-            ? 'Location permission denied. Allow location access in your browser/phone settings to walk the pond.'
-            : 'GPS signal interrupted. Recording paused safely — your recorded points are preserved.'
+            ? tr(
+                language,
+                'Ruhusa ya eneo imezuiwa. Ruhusu eneo kwenye mipangilio ya kivinjari/simu ili utembee kuzunguka bwawa.',
+                'Location permission denied. Allow location access in your browser/phone settings to walk the pond.'
+              )
+            : tr(
+                language,
+                'Mawimbi ya GPS yamekatika. Kurekodi kumesitishwa kwa usalama — nukta ulizorekodi zimehifadhiwa.',
+                'GPS signal interrupted. Recording paused safely — your recorded points are preserved.'
+              )
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
@@ -213,7 +248,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
 
   const handleCaptureNow = () => {
     if (!currentPos) {
-      setWarningMsg('Waiting for first GPS fix...');
+      setWarningMsg(tr(language, 'Inasubiri mawimbi ya kwanza ya GPS...', 'Waiting for first GPS fix...'));
       return;
     }
     setTrack((prev) => [
@@ -245,7 +280,13 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
     if (track.length === 0) return;
     try {
       localStorage.setItem(GPS_WALK_DRAFT_KEY, JSON.stringify(track));
-      setWarningMsg('Draft saved on this device. You can resume or finish anytime.');
+      setWarningMsg(
+        tr(
+          language,
+          'Rasimu imehifadhiwa kwenye kifaa hiki. Unaweza kuendelea au kumaliza muda wowote.',
+          'Draft saved on this device. You can resume or finish anytime.'
+        )
+      );
     } catch {
       // ignore
     }
@@ -256,7 +297,9 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
     setStatus('idle');
     if (track.length < 3) {
       setErrorMsg(
-        `Only ${track.length} point(s) recorded. Walk at least 3 corners around the pond before finishing.`
+        language === 'sw'
+          ? `Nukta ${track.length} pekee zimerekodiwa. Tembea angalau pembe 3 kuzunguka bwawa kabla ya kumaliza.`
+          : `Only ${track.length} point(s) recorded. Walk at least 3 corners around the pond before finishing.`
       );
       return;
     }
@@ -269,7 +312,9 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
 
     if (avgAcc && avgAcc > targetAccuracyM * 1.5) {
       setWarningMsg(
-        `Average GPS accuracy was ±${avgAcc} m. Previewing on satellite so you can adjust corners if needed.`
+        language === 'sw'
+          ? `Usahihi wa wastani wa GPS ulikuwa ±${avgAcc} m. Tunaonyesha kwenye satelaiti ili uweze kurekebisha pembe ikihitajika.`
+          : `Average GPS accuracy was ±${avgAcc} m. Previewing on satellite so you can adjust corners if needed.`
       );
     }
 
@@ -295,6 +340,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
           polygonLatLng: track.map((t) => [t.lat, t.lng]),
           unitType,
           farmGps,
+          language,
         })
       : null;
 
@@ -305,23 +351,29 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
           <Footprints className="h-4 w-4 text-orange-600" />
           <div>
             <div className="font-bold text-slate-900 dark:text-white">
-              Walk around the pond
+              {tr(language, 'Tembea kuzunguka bwawa', 'Walk around the pond')}
             </div>
             <div className="text-[11px] text-slate-600 dark:text-slate-300">
-              Stand at a pond corner, press Start recording, walk slowly around the outer edge, and press Finish.
+              {tr(
+                language,
+                'Simama kwenye kona ya bwawa, bonyeza Anza Kurekodi, tembea polepole kuzunguka ukingo wa nje, kisha bonyeza Maliza.',
+                'Stand at a pond corner, press Start recording, walk slowly around the outer edge, and press Finish.'
+              )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-[11px]">
-          <span className="text-slate-500 dark:text-slate-400">Target accuracy:</span>
+          <span className="text-slate-500 dark:text-slate-400">
+            {tr(language, 'Usahihi unaolengwa:', 'Target accuracy:')}
+          </span>
           <select
             value={targetAccuracyM}
             onChange={(e) => setTargetAccuracyM(Number(e.target.value))}
             className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
           >
-            <option value={5}>≤ 5 m (Strict)</option>
-            <option value={10}>≤ 10 m (Standard)</option>
-            <option value={20}>≤ 20 m (Shaded/Rural)</option>
+            <option value={5}>{tr(language, '≤ 5 m (Mkali)', '≤ 5 m (Strict)')}</option>
+            <option value={10}>{tr(language, '≤ 10 m (Kawaida)', '≤ 10 m (Standard)')}</option>
+            <option value={20}>{tr(language, '≤ 20 m (Kivuli/Kijijini)', '≤ 20 m (Shaded/Rural)')}</option>
           </select>
         </div>
       </div>
@@ -330,7 +382,9 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
       {recoverableDraft && track.length === 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] dark:border-sky-800 dark:bg-sky-950/50">
           <span className="font-medium text-sky-900 dark:text-sky-200">
-            Unfinished GPS walk found ({recoverableDraft.length} points saved).
+            {language === 'sw'
+              ? `Matembezi ya GPS yasiyomalizika yamepatikana (nukta ${recoverableDraft.length} zimehifadhiwa).`
+              : `Unfinished GPS walk found (${recoverableDraft.length} points saved).`}
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -342,7 +396,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
               }}
               className="rounded-md bg-sky-600 px-2.5 py-1 font-semibold text-white hover:bg-sky-700"
             >
-              Resume walk
+              {tr(language, 'Endelea na matembezi', 'Resume walk')}
             </button>
             <button
               type="button"
@@ -352,7 +406,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
               }}
               className="text-slate-600 hover:underline dark:text-slate-400"
             >
-              Discard
+              {tr(language, 'Futa', 'Discard')}
             </button>
           </div>
         </div>
@@ -361,29 +415,41 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
       {/* Telemetry Strip */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-lg bg-white p-2 dark:bg-slate-900">
-          <div className="text-[10px] text-slate-500 dark:text-slate-400">GPS status</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {tr(language, 'Hali ya GPS', 'GPS status')}
+          </div>
           <div className="mt-0.5 font-semibold text-slate-900 tabular-nums dark:text-white">
             {liveAccuracyM !== undefined
-              ? `±${liveAccuracyM} m ${liveAccuracyM <= targetAccuracyM ? '(Good)' : '(Wait)'}`
+              ? `±${liveAccuracyM} m ${
+                  liveAccuracyM <= targetAccuracyM
+                    ? tr(language, '(Nzuri)', '(Good)')
+                    : tr(language, '(Subiri)', '(Wait)')
+                }`
               : status === 'recording'
-                ? 'Searching...'
-                : 'Ready to start'}
+                ? tr(language, 'Inatafuta...', 'Searching...')
+                : tr(language, 'Tayari kuanza', 'Ready to start')}
           </div>
         </div>
         <div className="rounded-lg bg-white p-2 dark:bg-slate-900">
-          <div className="text-[10px] text-slate-500 dark:text-slate-400">Recorded points</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {tr(language, 'Nukta zilizorekodiwa', 'Recorded points')}
+          </div>
           <div className="mt-0.5 font-mono font-bold text-slate-900 tabular-nums dark:text-white">
             {track.length}
           </div>
         </div>
         <div className="rounded-lg bg-white p-2 dark:bg-slate-900">
-          <div className="text-[10px] text-slate-500 dark:text-slate-400">Distance walked</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {tr(language, 'Umbali uliotembea', 'Distance walked')}
+          </div>
           <div className="mt-0.5 font-mono font-bold text-slate-900 tabular-nums dark:text-white">
             {Math.round(distanceWalkedM)} m
           </div>
         </div>
         <div className="rounded-lg bg-white p-2 dark:bg-slate-900">
-          <div className="text-[10px] text-slate-500 dark:text-slate-400">Estimated area</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
+            {tr(language, 'Makadirio ya eneo', 'Estimated area')}
+          </div>
           <div className="mt-0.5 font-mono font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
             {livePreview?.valid ? `${livePreview.areaSqm.toLocaleString()} m²` : '—'}
           </div>
@@ -412,7 +478,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
             onClick={startOrResumeWatch}
             className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-orange-700"
           >
-            <Navigation className="h-3.5 w-3.5" /> Start recording
+            <Navigation className="h-3.5 w-3.5" /> {tr(language, 'Anza Kurekodi', 'Start recording')}
           </button>
         )}
 
@@ -423,14 +489,14 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
               onClick={handlePause}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-100"
             >
-              <Pause className="h-3.5 w-3.5" /> Pause
+              <Pause className="h-3.5 w-3.5" /> {tr(language, 'Simamisha', 'Pause')}
             </button>
             <button
               type="button"
               onClick={handleCaptureNow}
               className="inline-flex items-center gap-1.5 rounded-xl border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-100"
             >
-              + Capture point
+              {tr(language, '+ Rekodi Nukta', '+ Capture point')}
             </button>
           </>
         )}
@@ -441,7 +507,7 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
             onClick={startOrResumeWatch}
             className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-orange-700"
           >
-            <Play className="h-3.5 w-3.5" /> Resume recording
+            <Play className="h-3.5 w-3.5" /> {tr(language, 'Endelea Kurekodi', 'Resume recording')}
           </button>
         )}
 
@@ -452,28 +518,29 @@ export const GuidedGpsWalkPanel: React.FC<GuidedGpsWalkPanelProps> = ({
               onClick={handleUndo}
               className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
-              <Undo2 className="h-3.5 w-3.5" /> Undo
+              <Undo2 className="h-3.5 w-3.5" /> {tr(language, 'Tengua', 'Undo')}
             </button>
             <button
               type="button"
               onClick={handleSaveDraft}
               className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
-              <Save className="h-3.5 w-3.5" /> Save draft
+              <Save className="h-3.5 w-3.5" /> {tr(language, 'Hifadhi Rasimu', 'Save draft')}
             </button>
             <button
               type="button"
               onClick={handleRestart}
               className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> Restart
+              <RotateCcw className="h-3.5 w-3.5" /> {tr(language, 'Anza Upya', 'Restart')}
             </button>
             <button
               type="button"
               onClick={handleFinish}
               className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Finish & preview on satellite
+              <CheckCircle2 className="h-3.5 w-3.5" />{' '}
+              {tr(language, 'Maliza na Hakiki kwenye Satelaiti', 'Finish & preview on satellite')}
             </button>
           </>
         )}

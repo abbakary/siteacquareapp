@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2 } from 'lucide-react';
 import { DURATIONS, EASE_OUT } from './motion';
+import { usePreferences } from './PreferencesContext';
 import { cn } from './utils';
 
 interface FormErrorProps {
@@ -37,6 +38,7 @@ interface ValidCheckProps {
 }
 
 export const ValidCheck: React.FC<ValidCheckProps> = ({ valid }) => {
+  const { language } = usePreferences();
   if (!valid) return null;
   return (
     <motion.span
@@ -44,7 +46,7 @@ export const ValidCheck: React.FC<ValidCheckProps> = ({ valid }) => {
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
       className="inline-flex items-center text-emerald-600 dark:text-emerald-400"
-      aria-label="Valid"
+      aria-label={language === 'sw' ? 'Sahihi' : 'Valid'}
     >
       <CheckCircle2 className="h-3.5 w-3.5" />
     </motion.span>

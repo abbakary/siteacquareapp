@@ -44,7 +44,7 @@ export const Sheet: React.FC<SheetProps> = ({
   children,
 }) => {
   const isMobile = useIsMobileViewport();
-  const { effectiveReducedMotion } = usePreferences();
+  const { effectiveReducedMotion, language } = usePreferences();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
@@ -193,7 +193,7 @@ export const Sheet: React.FC<SheetProps> = ({
                   <button
                     type="button"
                     onClick={onClose}
-                    aria-label="Close modal"
+                    aria-label={language === 'sw' ? 'Funga dirisha' : 'Close modal'}
                     className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                   >
                     <X className="h-4 w-4" />

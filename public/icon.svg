@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#081C3A" />
+      <stop offset="100%" stop-color="#041024" />
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="60" y1="310" x2="452" y2="410" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284C7" />
+      <stop offset="55%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#0D9488" />
+    </linearGradient>
+    <linearGradient id="fishGrad" x1="120" y1="130" x2="395" y2="275" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="65%" stop-color="#E0F2FE" />
+      <stop offset="100%" stop-color="#7DD3FC" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <circle cx="256" cy="256" r="218" stroke="#38BDF8" stroke-opacity="0.22" stroke-width="6" />
+
+  <!-- Leaping Tilapia -->
+  <path
+    d="M150 226 C188 148, 286 128, 368 188 C334 218, 290 236, 232 238 C196 239, 170 232, 150 226 Z"
+    fill="url(#fishGrad)"
+  />
+  <!-- Dorsal fin -->
+  <path
+    d="M214 162 L248 124 L292 146 C268 156, 240 162, 214 162 Z"
+    fill="#38BDF8"
+  />
+  <!-- Tail fin -->
+  <path
+    d="M158 218 L106 184 L122 228 L104 264 L160 236 Z"
+    fill="#38BDF8"
+  />
+  <!-- Eye -->
+  <circle cx="326" cy="184" r="9" fill="#081C3A" />
+  <circle cx="329" cy="181" r="3" fill="#FFFFFF" />
+
+  <!-- Ocean Waves -->
+  <path
+    d="M84 318 C144 266, 224 266, 292 312 C348 348, 404 338, 434 304 C406 376, 336 392, 266 356 C202 322, 138 332, 84 374 Z"
+    fill="url(#waveGrad)"
+  />
+  <path
+    d="M104 388 C176 346, 250 356, 314 386 C362 408, 402 396, 430 374 C402 422, 342 436, 280 410 C218 384, 158 390, 104 420 Z"
+    fill="#38BDF8"
+    fill-opacity="0.85"
+  />
+</svg>
