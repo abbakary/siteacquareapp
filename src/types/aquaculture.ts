@@ -43,11 +43,71 @@ export interface Employee {
   avatarUrl?: string;
 }
 
+export type MapViewMode = 'satellite' | 'hybrid' | 'street' | 'terrain' | 'infrastructure';
+
+export type MappingMethod =
+  | 'Satellite Drawing'
+  | 'GPS Boundary Walk'
+  | 'GPX/GeoJSON Import'
+  | 'Survey GNSS'
+  | 'Registry Seed';
+
+export type InfrastructureMarkerType =
+  | 'Water Inlet'
+  | 'Water Outlet'
+  | 'Drainage Channel'
+  | 'Borehole'
+  | 'Pump'
+  | 'Aerator'
+  | 'Water Sensor'
+  | 'Feeder'
+  | 'Generator'
+  | 'Security';
+
+export interface GeoJsonPolygon {
+  type: 'Polygon';
+  coordinates: [number, number][][]; // GeoJSON [lng, lat] coordinate pairs
+}
+
+export interface FarmInfrastructureMarker {
+  id: string;
+  farmId: string;
+  pondId?: string;
+  pondCode?: string;
+  type: InfrastructureMarkerType;
+  label: string;
+  gps: [number, number]; // [lat, lng]
+  status?: 'Operational' | 'Maintenance' | 'Standby';
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export type FarmLocationSource = 'GPS' | 'SEARCH' | 'MANUAL_ADJUSTMENT' | 'REGISTRY';
+
+export type PondBoundarySource = 'GPS_WALK' | 'MAP_EDIT' | 'IMPORT' | 'REGISTRY';
+
+export interface GpsTrackPoint {
+  lat: number;
+  lng: number;
+  accuracyM?: number;
+  timestamp: string;
+}
+
 export interface Farm {
   id: string;
   name: string;
   region: string;
   gps: [number, number]; // [lat, lng]
+  locationAccuracyM?: number;
+  locationSource?: FarmLocationSource;
+  placeName?: string;
+  locationGeojson?: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  boundary?: [number, number][]; // Optional authorized farm perimeter [lat, lng]
+  authorizedRadiusM?: number;
   operationTypes: OperationType[];
   waterSource: string;
   drainageSystem: string;
@@ -74,12 +134,27 @@ export interface Pond {
   maxCapacity: number;
   dimensions: string;
   waterCapacityM3: number;
+  waterSource?: string;
+  drainageSystem?: string;
   status: 'Healthy' | 'Attention' | 'Preparing' | 'Harvest Ready';
   readinessPct: number;
   assignedKeeperId: string;
   assignedTechnicianId: string;
-  gps: [number, number];
-  polygon: [number, number][];
+  gps: [number, number]; // Center [lat, lng]
+  polygon: [number, number][]; // Boundary vertices [lat, lng]
+  geometry?: GeoJsonPolygon; // Authoritative GeoJSON [lng, lat]
+  rawGpsTrack?: GpsTrackPoint[]; // Preserved original GPS walk track before any manual edits
+  boundarySource?: PondBoundarySource;
+  areaSqm?: number;
+  waterSurfaceSqm?: number;
+  perimeterM?: number;
+  boundaryPointsCount?: number;
+  mappingMethod?: MappingMethod;
+  gpsAccuracyM?: number;
+  boundaryVerified?: boolean;
+  mappedBy?: string;
+  mappedAt?: string;
+  updatedBy?: string;
   aeratorRelayOn: boolean;
   qrCodeToken: string;
 }
@@ -493,6 +568,7 @@ export interface AquacultureState {
   employees: Employee[];
   farms: Farm[];
   ponds: Pond[];
+  infrastructureMarkers: FarmInfrastructureMarker[];
   speciesCatalogue: SpeciesInfo[];
   batches: FishBatch[];
   movements: BatchMovement[];

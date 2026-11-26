@@ -3,6 +3,11 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  buildGeoJsonFeatureCollection,
+  measureAndValidatePolygon,
+} from './src/utils/gisGeometry.ts';
+import type { Farm, FarmInfrastructureMarker, Pond } from './src/types/aquaculture.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +73,247 @@ async function startServer() {
 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'DukaAquSmart API', timestamp: new Date().toISOString() });
+  });
+
+  // GIS Map Provider Capability Info (never exposes raw secret)
+  app.get('/api/gis/config', (_req, res) => {
+    const hasMapTiler = Boolean(
+      (process.env.VITE_MAPTILER_API_KEY || process.env.MAPTILER_API_KEY)?.trim()
+    );
+    res.json({
+      provider: hasMapTiler ? 'maptiler' : 'esri-osm-fallback',
+      mapTilerConfigured: hasMapTiler,
+      supportedModes: ['satellite', 'hybrid', 'street', 'terrain', 'infrastructure'],
+    });
+  });
+
+  // Forward Geocoding: Search village, ward, landmark or farm (MapTiler -> Nominatim fallback)
+  app.get('/api/gis/geocode', async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (q.length < 2) {
+      res.json({ results: [], provider: 'none' });
+      return;
+    }
+
+    const mapTilerKey = (process.env.VITE_MAPTILER_API_KEY || process.env.MAPTILER_API_KEY)?.trim();
+    try {
+      if (mapTilerKey) {
+        const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(
+          q
+        )}.json?key=${encodeURIComponent(mapTilerKey)}&country=tz&limit=6&language=en`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const data = (await resp.json()) as {
+            features?: Array<{
+              id?: string;
+              place_name?: string;
+              text?: string;
+              center?: [number, number];
+            }>;
+          };
+          const results = (data.features || [])
+            .filter((f) => Array.isArray(f.center) && f.center.length >= 2)
+            .map((f, idx) => ({
+              id: f.id || `mt-${idx}`,
+              title: f.text || f.place_name || q,
+              placeName: f.place_name || f.text || q,
+              lat: Number(f.center![1]),
+              lng: Number(f.center![0]),
+              source: 'maptiler',
+            }));
+          res.json({ results, provider: 'maptiler' });
+          return;
+        }
+      }
+
+      const nomUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=tz&limit=6&q=${encodeURIComponent(
+        q
+      )}`;
+      const nomResp = await fetch(nomUrl, {
+        headers: {
+          'User-Agent': 'DukaAquSmart-Tanzania/1.0 (aquaculture-gis)',
+          'Accept-Language': 'en,sw',
+        },
+      });
+      if (!nomResp.ok) {
+        res.status(502).json({ results: [], error: 'Geocoding lookup failed.' });
+        return;
+      }
+      const rows = (await nomResp.json()) as Array<{
+        place_id?: number;
+        display_name?: string;
+        name?: string;
+        lat?: string;
+        lon?: string;
+      }>;
+      const results = rows
+        .map((r, idx) => ({
+          id: String(r.place_id || idx),
+          title: r.name || (r.display_name || '').split(',')[0] || q,
+          placeName: r.display_name || q,
+          lat: Number(r.lat),
+          lng: Number(r.lon),
+          source: 'nominatim',
+        }))
+        .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng));
+
+      res.json({ results, provider: 'nominatim' });
+    } catch {
+      res.status(500).json({ results: [], error: 'Unable to reach geocoding service.' });
+    }
+  });
+
+  // Reverse Geocoding: Convert GPS lat/lng to nearest Tanzanian ward/village/place name
+  app.get('/api/gis/reverse-geocode', async (req, res) => {
+    const lat = Number(req.query.lat);
+    const lng = Number(req.query.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      res.status(400).json({ error: 'Valid lat and lng query parameters are required.' });
+      return;
+    }
+
+    const mapTilerKey = (process.env.VITE_MAPTILER_API_KEY || process.env.MAPTILER_API_KEY)?.trim();
+    try {
+      if (mapTilerKey) {
+        const url = `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${encodeURIComponent(
+          mapTilerKey
+        )}&limit=1`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const data = (await resp.json()) as {
+            features?: Array<{ place_name?: string; text?: string }>;
+          };
+          const feat = data.features?.[0];
+          if (feat?.place_name) {
+            res.json({
+              placeName: feat.place_name,
+              shortName: feat.text || feat.place_name.split(',')[0],
+              provider: 'maptiler',
+            });
+            return;
+          }
+        }
+      }
+
+      const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+        lat
+      )}&lon=${encodeURIComponent(lng)}&zoom=15`;
+      const nomResp = await fetch(nomUrl, {
+        headers: {
+          'User-Agent': 'DukaAquSmart-Tanzania/1.0 (aquaculture-gis)',
+          'Accept-Language': 'en,sw',
+        },
+      });
+      if (nomResp.ok) {
+        const data = (await nomResp.json()) as {
+          display_name?: string;
+          address?: {
+            suburb?: string;
+            village?: string;
+            town?: string;
+            city_district?: string;
+            city?: string;
+            state?: string;
+          };
+        };
+        const addr = data.address || {};
+        const shortName =
+          addr.village || addr.suburb || addr.town || addr.city_district || addr.city || addr.state;
+        res.json({
+          placeName: data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          shortName: shortName || 'Tanzania Site',
+          provider: 'nominatim',
+        });
+        return;
+      }
+      res.json({
+        placeName: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        shortName: 'GPS Location',
+        provider: 'coordinates',
+      });
+    } catch {
+      res.json({
+        placeName: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        shortName: 'GPS Location',
+        provider: 'coordinates',
+      });
+    }
+  });
+
+  // Server-Side Geospatial Polygon Validation & Authoritative Measurement
+  app.post('/api/gis/validate-geometry', (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const rawPoly = Array.isArray(body.polygonLatLng) ? body.polygonLatLng : [];
+    const polygonLatLng: [number, number][] = [];
+
+    for (const pt of rawPoly) {
+      if (Array.isArray(pt) && pt.length >= 2) {
+        const lat = Number(pt[0]);
+        const lng = Number(pt[1]);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          polygonLatLng.push([lat, lng]);
+        }
+      }
+    }
+
+    const rawFarmGps = Array.isArray(body.farmGps) ? body.farmGps : null;
+    const farmGps: [number, number] | undefined =
+      rawFarmGps && rawFarmGps.length >= 2 && Number.isFinite(Number(rawFarmGps[0])) && Number.isFinite(Number(rawFarmGps[1]))
+        ? [Number(rawFarmGps[0]), Number(rawFarmGps[1])]
+        : undefined;
+
+    const unitType =
+      typeof body.unitType === 'string'
+        ? (body.unitType as Pond['unitType'])
+        : undefined;
+    const gpsAccuracyM =
+      typeof body.gpsAccuracyM === 'number' && Number.isFinite(body.gpsAccuracyM)
+        ? body.gpsAccuracyM
+        : undefined;
+    const maxRadiusM =
+      typeof body.maxRadiusM === 'number' && Number.isFinite(body.maxRadiusM)
+        ? body.maxRadiusM
+        : 15000;
+
+    const result = measureAndValidatePolygon({
+      polygonLatLng,
+      unitType,
+      farmGps,
+      maxRadiusM,
+      gpsAccuracyM,
+    });
+
+    if (!result.valid) {
+      res.status(400).json({
+        ok: false,
+        ...result,
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      serverValidated: true,
+      verifiedAt: new Date().toISOString(),
+      ...result,
+    });
+  });
+
+  // Server-Side RFC 7946 GeoJSON Export
+  app.post('/api/gis/export-geojson', (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const ponds = Array.isArray(body.ponds) ? (body.ponds as Pond[]) : [];
+    const farms = Array.isArray(body.farms) ? (body.farms as Farm[]) : [];
+    const infrastructureMarkers = Array.isArray(body.infrastructureMarkers)
+      ? (body.infrastructureMarkers as FarmInfrastructureMarker[])
+      : [];
+
+    const collection = buildGeoJsonFeatureCollection({
+      ponds,
+      farms,
+      infrastructureMarkers,
+    });
+    res.json(collection);
   });
 
   // Transaction-Safe Quick Sale Confirmation (Idempotent & Duplicate-Submission Protected)

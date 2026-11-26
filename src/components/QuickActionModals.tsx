@@ -1533,6 +1533,12 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
   const batch = activePond ? state.batches.find((b) => b.pondCode === activePond.code) : undefined;
   const wq = activePond ? state.waterReadings.find((w) => w.pondCode === activePond.code) : undefined;
   const keeper = activePond ? state.employees.find((e) => e.id === activePond.assignedKeeperId) : undefined;
+  const farm = activePond ? state.farms.find((f) => f.id === activePond.farmId) : undefined;
+  const linkedInfra = activePond
+    ? (state.infrastructureMarkers || []).filter(
+        (m) => m.pondCode === activePond.code || m.pondId === activePond.id
+      )
+    : [];
 
   const cells = activePond
     ? Array.from({ length: 49 }, (_, i) => {
@@ -1545,20 +1551,20 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
     <Sheet
       open={Boolean(pond)}
       onClose={onClose}
-      maxWidthClass="sm:max-w-md"
+      maxWidthClass="sm:max-w-lg"
       title={
         activePond && (
           <span className="flex items-center gap-2">
             <QrCode className="h-4 w-4 text-blue-600 dark:text-sky-400" />
             <span>
-              {activePond.name} ({activePond.code}) Digital QR Profile
+              {activePond.name} ({activePond.code}) Digital Twin & QR Profile
             </span>
           </span>
         )
       }
     >
       {activePond && (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800/70">
             <div className="grid grid-cols-7 gap-0.5 rounded-lg border border-slate-300 bg-white p-2 dark:border-slate-600">
               {cells.map((filled, idx) => (
@@ -1579,8 +1585,75 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 Stock: <strong className="tabular-nums">{activePond.currentFish.toLocaleString()}</strong> /{' '}
                 {activePond.maxCapacity.toLocaleString()}
               </div>
-              <div className="text-slate-500 dark:text-slate-400">Keeper: {keeper?.name || 'Assigned'}</div>
+              <div className="text-slate-500 dark:text-slate-400">
+                {farm?.region || 'Farm'} · Keeper: {keeper?.name || 'Assigned'}
+              </div>
             </div>
+          </div>
+
+          {/* Digital Geographical Identity */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs dark:border-sky-900/60 dark:bg-sky-950/30">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="font-bold text-slate-900 dark:text-white">
+                Digital Geographical Identity
+              </span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                {activePond.boundaryVerified ? 'Boundary Verified' : 'Pending Verification'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700 tabular-nums dark:text-slate-300">
+              <div>
+                Surface Area:{' '}
+                <strong>
+                  {activePond.areaSqm ? `${activePond.areaSqm.toLocaleString()} m²` : activePond.dimensions}
+                </strong>
+              </div>
+              <div>
+                Perimeter:{' '}
+                <strong>{activePond.perimeterM ? `${activePond.perimeterM.toLocaleString()} m` : '—'}</strong>
+              </div>
+              <div>
+                Center GPS:{' '}
+                <strong className="font-mono">
+                  {activePond.gps[0].toFixed(5)}, {activePond.gps[1].toFixed(5)}
+                </strong>
+              </div>
+              <div>
+                Corners / Method:{' '}
+                <strong>
+                  {activePond.boundaryPointsCount || activePond.polygon?.length || 0} pts ·{' '}
+                  {activePond.mappingMethod || 'Registry Seed'}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Infrastructure Relationships */}
+          <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
+            <div className="mb-1.5 font-bold text-slate-900 dark:text-white">
+              Infrastructure Relationships ({linkedInfra.length})
+            </div>
+            {linkedInfra.length > 0 ? (
+              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                {linkedInfra.map((inf) => (
+                  <div
+                    key={inf.id}
+                    className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 dark:bg-slate-800/70"
+                  >
+                    <span className="truncate font-medium text-slate-800 dark:text-slate-200">
+                      {inf.type}
+                    </span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      Mapped
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                No individual inlets, outlets, or aerator markers pinned to {activePond.code} yet. Use Farm Digital Twin map to pin assets.
+              </div>
+            )}
           </div>
 
           {batch && (

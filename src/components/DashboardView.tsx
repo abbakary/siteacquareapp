@@ -22,8 +22,9 @@ import {
   Bell,
   ArrowUpRight,
   ShoppingBag,
+  Crosshair,
 } from 'lucide-react';
-import { AquacultureState, Language, NavSection, Pond } from '../types/aquaculture';
+import { AquacultureState, Language, MapViewMode, NavSection, Pond } from '../types/aquaculture';
 import { ASSET_IMAGES } from '../data/seedData';
 import { TRANSLATIONS } from '../i18n/translations';
 import { formatNumber, formatTzs, isDateInPeriod, TimeFilterPeriod } from '../utils/formatters';
@@ -77,7 +78,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const t = TRANSLATIONS[language];
   const [chartRange, setChartRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [financePeriod, setFinancePeriod] = useState<TimeFilterPeriod>('month');
-  const [mapMode, setMapMode] = useState<'map' | 'satellite'>('satellite');
+  const [mapMode, setMapMode] = useState<MapViewMode>('satellite');
+  const [locatingGps, setLocatingGps] = useState(false);
+  const [userLocation, setUserLocation] = useState<{
+    gps: [number, number];
+    accuracyM?: number;
+    placeName?: string;
+  } | null>(null);
+  const [gpsError, setGpsError] = useState('');
+
+  const handleUseMyLocation = () => {
+    setGpsError('');
+    if (!navigator.geolocation) {
+      setGpsError('Location unavailable on this browser.');
+      return;
+    }
+    setLocatingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        const accuracyM = Math.round(pos.coords.accuracy);
+        let placeName = '';
+        try {
+          const res = await fetch(
+            `/api/gis/reverse-geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
+          );
+          if (res.ok) {
+            const data = (await res.json()) as { placeName?: string };
+            placeName = data.placeName || '';
+          }
+        } catch {
+          // ignore
+        }
+        setUserLocation({ gps: [lat, lng], accuracyM, placeName });
+        setLocatingGps(false);
+      },
+      () => {
+        setLocatingGps(false);
+        setGpsError('Location permission needed — open Farms & Ponds to search your village.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   // Dynamic live metrics derived from current state
   const totalLiveFish = state.ponds.reduce((acc, p) => acc + p.currentFish, 0);
@@ -845,30 +888,60 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </h2>
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-              <button
-                type="button"
-                onClick={() => setMapMode('map')}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                  mapMode === 'map'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                Map
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapMode('satellite')}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                  mapMode === 'satellite'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
-                }`}
-              >
-                Satellite
-              </button>
+              {(
+                [
+                  { id: 'satellite', label: 'Satellite' },
+                  { id: 'street', label: 'Street' },
+                  { id: 'infrastructure', label: 'Infra' },
+                ] as const
+              ).map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setMapMode(mode.id)}
+                  className={`rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+                    mapMode === mode.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
             </div>
           </div>
+
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={locatingGps}
+              className="inline-flex items-center gap-1 rounded-lg bg-[#0284c7] px-2.5 py-1 text-[11px] font-bold text-white shadow-xs hover:bg-[#0369a1] disabled:opacity-60"
+            >
+              <Crosshair className="h-3 w-3" />
+              {locatingGps ? 'Finding location...' : 'Use my current location'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('farms-ponds')}
+              className="text-[11px] font-semibold text-sky-600 hover:underline dark:text-sky-400"
+            >
+              Register Farm / Pond →
+            </button>
+          </div>
+
+          {gpsError && (
+            <div className="mb-2 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+              {gpsError}
+            </div>
+          )}
+
+          {userLocation && (
+            <div className="mb-2 truncate rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+              GPS found: {userLocation.placeName || `${userLocation.gps[0].toFixed(4)}, ${userLocation.gps[1].toFixed(4)}`}
+              {userLocation.accuracyM !== undefined ? ` (±${userLocation.accuracyM}m)` : ''}
+            </div>
+          )}
 
           <Suspense fallback={<MapSkeleton heightClass="h-[185px]" />}>
             <LeafletFarmMap
@@ -877,6 +950,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               selectedFarmId={selectedFarmId}
               mapMode={mapMode}
               heightClass="h-[185px]"
+              infrastructureMarkers={state.infrastructureMarkers || []}
+              waterReadings={state.waterReadings}
+              userLocation={userLocation}
               onSelectPond={onSelectPond}
             />
           </Suspense>

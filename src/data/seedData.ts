@@ -1,4 +1,25 @@
-import { AquacultureState } from '../types/aquaculture';
+import { AquacultureState, Pond } from '../types/aquaculture';
+import { measureAndValidatePolygon } from '../utils/gisGeometry';
+
+function withGisMetrics(pond: Pond): Pond {
+  const m = measureAndValidatePolygon({
+    polygonLatLng: pond.polygon,
+    unitType: pond.unitType,
+  });
+  return {
+    ...pond,
+    gps: m.valid ? m.centerGps : pond.gps,
+    geometry: m.geometry ?? undefined,
+    areaSqm: m.areaSqm,
+    waterSurfaceSqm: m.waterSurfaceSqm,
+    perimeterM: m.perimeterM,
+    boundaryPointsCount: m.pointsCount,
+    mappingMethod: pond.mappingMethod ?? 'Registry Seed',
+    boundaryVerified: pond.boundaryVerified ?? true,
+    mappedBy: pond.mappedBy ?? 'John M. Mwakasege',
+    mappedAt: pond.mappedAt ?? '2026-10-12T08:30:00Z',
+  };
+}
 
 export const ASSET_IMAGES = {
   banner: '/src/assets/images/banner_tanzania_ponds_1795093727131.jpg',
@@ -174,7 +195,7 @@ export const INITIAL_STATE: AquacultureState = {
     },
   ],
   ponds: [
-    {
+    withGisMetrics({
       id: 'pond-1',
       code: 'POND-001',
       name: 'Pond 1',
@@ -199,8 +220,8 @@ export const INITIAL_STATE: AquacultureState = {
       ],
       aeratorRelayOn: false,
       qrCodeToken: 'DUKA-QR-POND001-DSM',
-    },
-    {
+    }),
+    withGisMetrics({
       id: 'pond-2',
       code: 'POND-002',
       name: 'Pond 2',
@@ -225,8 +246,8 @@ export const INITIAL_STATE: AquacultureState = {
       ],
       aeratorRelayOn: false,
       qrCodeToken: 'DUKA-QR-POND002-DSM',
-    },
-    {
+    }),
+    withGisMetrics({
       id: 'pond-3',
       code: 'POND-003',
       name: 'Pond 3',
@@ -251,8 +272,8 @@ export const INITIAL_STATE: AquacultureState = {
       ],
       aeratorRelayOn: true,
       qrCodeToken: 'DUKA-QR-POND003-DSM',
-    },
-    {
+    }),
+    withGisMetrics({
       id: 'pond-4',
       code: 'POND-004',
       name: 'Pond 4',
@@ -277,8 +298,8 @@ export const INITIAL_STATE: AquacultureState = {
       ],
       aeratorRelayOn: false,
       qrCodeToken: 'DUKA-QR-POND004-DSM',
-    },
-    {
+    }),
+    withGisMetrics({
       id: 'pond-5',
       code: 'POND-005',
       name: 'Pond 5',
@@ -303,6 +324,100 @@ export const INITIAL_STATE: AquacultureState = {
       ],
       aeratorRelayOn: false,
       qrCodeToken: 'DUKA-QR-POND005-DSM',
+    }),
+  ],
+  infrastructureMarkers: [
+    {
+      id: 'inf-1',
+      farmId: 'farm-dsm',
+      type: 'Borehole',
+      label: 'Primary Coastal Freshwater Borehole #1',
+      gps: [-6.8654, 39.3266],
+      status: 'Operational',
+      notes: '7.5kW submersible feed supply to Pond 1–5',
+      createdBy: 'John M. Mwakasege',
+      createdAt: '2026-10-12',
+    },
+    {
+      id: 'inf-2',
+      farmId: 'farm-dsm',
+      type: 'Pump',
+      label: 'Main Intake Booster Pump Station',
+      gps: [-6.86555, 39.32695],
+      status: 'Operational',
+      notes: 'Supplies main PVC header pipe',
+      createdBy: 'John M. Mwakasege',
+      createdAt: '2026-10-12',
+    },
+    {
+      id: 'inf-3',
+      farmId: 'farm-dsm',
+      pondId: 'pond-1',
+      pondCode: 'POND-001',
+      type: 'Water Inlet',
+      label: 'POND-001 North Inlet Valve',
+      gps: [-6.8657, 39.3267],
+      status: 'Operational',
+      createdBy: 'Neema S. Mollel',
+      createdAt: '2026-10-14',
+    },
+    {
+      id: 'inf-4',
+      farmId: 'farm-dsm',
+      pondId: 'pond-1',
+      pondCode: 'POND-001',
+      type: 'Water Sensor',
+      label: 'ESP32 DO/pH Node #1 (POND-001)',
+      gps: [-6.8659, 39.3269],
+      status: 'Operational',
+      createdBy: 'Neema S. Mollel',
+      createdAt: '2026-10-14',
+    },
+    {
+      id: 'inf-5',
+      farmId: 'farm-dsm',
+      pondId: 'pond-3',
+      pondCode: 'POND-003',
+      type: 'Aerator',
+      label: 'Paddlewheel Aerator #3 (POND-003)',
+      gps: [-6.86675, 39.32695],
+      status: 'Operational',
+      notes: 'Auto-relay triggered when DO < 4.5 mg/L',
+      createdBy: 'Neema S. Mollel',
+      createdAt: '2026-10-14',
+    },
+    {
+      id: 'inf-6',
+      farmId: 'farm-dsm',
+      pondId: 'pond-3',
+      pondCode: 'POND-003',
+      type: 'Water Outlet',
+      label: 'POND-003 Monk Drainage Outlet',
+      gps: [-6.867, 39.32715],
+      status: 'Operational',
+      createdBy: 'John M. Mwakasege',
+      createdAt: '2026-10-14',
+    },
+    {
+      id: 'inf-7',
+      farmId: 'farm-dsm',
+      type: 'Drainage Channel',
+      label: 'Main Sedimentation & Biofilter Canal',
+      gps: [-6.8678, 39.3276],
+      status: 'Operational',
+      notes: 'Collects effluent from POND-001 to POND-005',
+      createdBy: 'John M. Mwakasege',
+      createdAt: '2026-10-14',
+    },
+    {
+      id: 'inf-8',
+      farmId: 'farm-dsm',
+      type: 'Generator',
+      label: 'Perkins 45kVA Standby Generator House',
+      gps: [-6.86625, 39.3261],
+      status: 'Standby',
+      createdBy: 'John M. Mwakasege',
+      createdAt: '2026-10-14',
     },
   ],
   speciesCatalogue: [

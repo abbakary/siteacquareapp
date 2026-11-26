@@ -12,6 +12,7 @@ import {
   SaleLine,
 } from '../types/aquaculture';
 import { formatTzs, todayIso } from './formatters';
+import { measureAndValidatePolygon } from './gisGeometry';
 
 /**
  * Normalizes a Tanzanian phone number to 255XXXXXXXXX (12 digits).
@@ -213,7 +214,26 @@ export function migrateAquacultureState(
       ...(raw.salesPreferences || {}),
     },
     invoiceSequence: raw.invoiceSequence ?? defaults.invoiceSequence,
+    infrastructureMarkers:
+      Array.isArray(raw.infrastructureMarkers) && raw.infrastructureMarkers.length > 0
+        ? raw.infrastructureMarkers
+        : defaults.infrastructureMarkers,
   };
+
+  merged.ponds = merged.ponds.map((p) => {
+    if (p.areaSqm && p.perimeterM && p.geometry) return p;
+    const m = measureAndValidatePolygon({ polygonLatLng: p.polygon, unitType: p.unitType });
+    return {
+      ...p,
+      geometry: p.geometry ?? m.geometry ?? undefined,
+      areaSqm: p.areaSqm ?? m.areaSqm,
+      waterSurfaceSqm: p.waterSurfaceSqm ?? m.waterSurfaceSqm,
+      perimeterM: p.perimeterM ?? m.perimeterM,
+      boundaryPointsCount: p.boundaryPointsCount ?? m.pointsCount,
+      mappingMethod: p.mappingMethod ?? 'Registry Seed',
+      boundaryVerified: p.boundaryVerified ?? true,
+    };
+  });
 
   // If saved state came from pre-Phase-1 (had legacy harvests, but no harvestLots/sales array in raw)
   if (!raw.harvestLots && !raw.sales && Array.isArray(raw.harvests) && raw.harvests.length > 0) {

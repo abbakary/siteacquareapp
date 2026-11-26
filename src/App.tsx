@@ -2247,6 +2247,54 @@ export default function App() {
               state={state}
               selectedFarmId={selectedFarmId}
               onSelectPondQr={setSelectedPondQr}
+              onSaveFarmLocation={(payload) => {
+                if (
+                  state.farms.some((f) => f.name.toLowerCase() === payload.name.toLowerCase())
+                ) {
+                  return { ok: false, error: `Farm "${payload.name}" already exists.` };
+                }
+                const newFarmId = `farm-${Date.now()}`;
+                setState((prev) => ({
+                  ...prev,
+                  farms: [
+                    ...prev.farms,
+                    {
+                      id: newFarmId,
+                      name: payload.name,
+                      region: payload.region,
+                      gps: payload.gps,
+                      locationAccuracyM: payload.locationAccuracyM,
+                      locationSource: payload.locationSource,
+                      placeName: payload.placeName,
+                      locationGeojson: {
+                        type: 'Point',
+                        coordinates: [payload.gps[1], payload.gps[0]],
+                      },
+                      operationTypes: ['Grow-out Pond', 'Nursery'],
+                      waterSource: payload.waterSource,
+                      drainageSystem: payload.drainageSystem,
+                      fircisPermitNo: payload.fircisPermitNo,
+                      equipment: [],
+                      managerId: prev.activeUser.id,
+                    },
+                  ],
+                  auditLogs: [
+                    {
+                      id: `aud-${Date.now()}`,
+                      timestamp: nowTimestamp(),
+                      actorName: prev.activeUser.name,
+                      actorRole: prev.activeUser.role,
+                      module: 'Farm & GIS Mapping',
+                      action: 'Farm Site Registered',
+                      details: `${payload.name} located at ${payload.gps[0].toFixed(5)}, ${payload.gps[1].toFixed(5)} (${payload.locationSource}, ${payload.placeName}).`,
+                      pinVerified: false,
+                    },
+                    ...prev.auditLogs,
+                  ],
+                }));
+                showToast(`Farm "${payload.name}" located and saved.`);
+                return { ok: true, farmId: newFarmId };
+              }}
               onToggleAerator={(pondId) => {
                 setState((prev) => ({
                   ...prev,
@@ -2256,46 +2304,185 @@ export default function App() {
                 }));
                 showToast('Aerator relay state updated.');
               }}
-              onAddPond={(newP) => {
-                if (state.ponds.some((p) => p.code.toLowerCase() === newP.code.toLowerCase())) {
-                  return { ok: false, error: `Pond code ${newP.code} already exists.` };
+              onAddInfrastructureMarker={(m) => {
+                const newMarker = {
+                  id: `inf-${Date.now()}`,
+                  farmId: m.farmId,
+                  pondCode: m.pondCode,
+                  type: m.type,
+                  label: m.label,
+                  gps: m.gps,
+                  status: 'Operational' as const,
+                  createdBy: state.activeUser.name,
+                  createdAt: todayIso(),
+                };
+                setState((prev) => ({
+                  ...prev,
+                  infrastructureMarkers: [...(prev.infrastructureMarkers || []), newMarker],
+                  auditLogs: [
+                    {
+                      id: `aud-${Date.now()}`,
+                      timestamp: nowTimestamp(),
+                      actorName: prev.activeUser.name,
+                      actorRole: prev.activeUser.role,
+                      module: 'Farm & GIS Mapping',
+                      action: 'Infrastructure Pin Mapped',
+                      details: `Placed ${m.type} (${m.label}) at ${m.gps[0].toFixed(5)}, ${m.gps[1].toFixed(5)}.`,
+                      pinVerified: false,
+                    },
+                    ...prev.auditLogs,
+                  ],
+                }));
+                showToast(`Mapped ${m.label} on farm map.`);
+              }}
+              onSavePondGis={(payload) => {
+                if (payload.editingPondId) {
+                  setState((prev) => {
+                    const updatedMarkers = [
+                      ...(prev.infrastructureMarkers || []).filter(
+                        (m) => m.pondCode !== payload.code && m.pondId !== payload.editingPondId
+                      ),
+                      ...payload.infraMarkers.map((dm) => ({
+                        id: dm.id.startsWith('inf-draft-') ? `inf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` : dm.id,
+                        farmId: payload.farmId,
+                        pondId: payload.editingPondId,
+                        pondCode: payload.code,
+                        type: dm.type,
+                        label: `${payload.code} ${dm.type}`,
+                        gps: dm.gps,
+                        status: 'Operational' as const,
+                        createdBy: prev.activeUser.name,
+                        createdAt: todayIso(),
+                      })),
+                    ];
+                    return {
+                      ...prev,
+                      ponds: prev.ponds.map((p) =>
+                        p.id === payload.editingPondId
+                          ? {
+                              ...p,
+                              name: payload.name,
+                              farmId: payload.farmId,
+                              unitType: payload.unitType,
+                              operationStage: payload.operationStage,
+                              species: payload.species,
+                              maxCapacity: payload.maxCapacity,
+                              dimensions: payload.dimensions,
+                              waterCapacityM3: payload.waterCapacityM3,
+                              waterSource: payload.waterSource,
+                              drainageSystem: payload.drainageSystem,
+                              gps: payload.gps,
+                              polygon: payload.polygon,
+                              geometry: payload.geometry,
+                              rawGpsTrack: payload.rawGpsTrack ?? p.rawGpsTrack,
+                              boundarySource: payload.boundarySource,
+                              areaSqm: payload.areaSqm,
+                              waterSurfaceSqm: payload.waterSurfaceSqm,
+                              perimeterM: payload.perimeterM,
+                              boundaryPointsCount: payload.boundaryPointsCount,
+                              mappingMethod: payload.mappingMethod,
+                              gpsAccuracyM: payload.gpsAccuracyM,
+                              boundaryVerified: payload.boundaryVerified,
+                              updatedBy: prev.activeUser.name,
+                              mappedAt: nowTimestamp(),
+                            }
+                          : p
+                      ),
+                      infrastructureMarkers: updatedMarkers,
+                      auditLogs: [
+                        {
+                          id: `aud-${Date.now()}`,
+                          timestamp: nowTimestamp(),
+                          actorName: prev.activeUser.name,
+                          actorRole: prev.activeUser.role,
+                          module: 'Farm & GIS Mapping',
+                          action: 'Pond Digital Boundary Updated',
+                          details: `${payload.code} boundary updated (${payload.areaSqm} m², ${payload.perimeterM} m, ${payload.mappingMethod}).`,
+                          pinVerified: false,
+                        },
+                        ...prev.auditLogs,
+                      ],
+                    };
+                  });
+                  showToast(`Updated boundary for ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`);
+                  return { ok: true };
                 }
-                const baseLat = -6.8675;
-                const baseLng = 39.3292;
-                const offset = state.ponds.length * 0.0004;
+
+                if (state.ponds.some((p) => p.code.toLowerCase() === payload.code.toLowerCase())) {
+                  return { ok: false, error: `Pond code ${payload.code} already exists.` };
+                }
+
+                const newPondId = `pond-${Date.now()}`;
                 setState((prev) => ({
                   ...prev,
                   ponds: [
                     ...prev.ponds,
                     {
-                      id: `pond-${Date.now()}`,
-                      code: newP.code,
-                      name: newP.name,
-                      farmId: newP.farmId,
-                      unitType: newP.unitType,
-                      operationStage: newP.operationStage,
-                      species: newP.species,
+                      id: newPondId,
+                      code: payload.code,
+                      name: payload.name,
+                      farmId: payload.farmId,
+                      unitType: payload.unitType,
+                      operationStage: payload.operationStage,
+                      species: payload.species,
                       currentFish: 0,
-                      maxCapacity: newP.maxCapacity,
-                      dimensions: newP.dimensions,
-                      waterCapacityM3: newP.waterCapacityM3,
+                      maxCapacity: payload.maxCapacity,
+                      dimensions: payload.dimensions,
+                      waterCapacityM3: payload.waterCapacityM3,
+                      waterSource: payload.waterSource,
+                      drainageSystem: payload.drainageSystem,
                       status: 'Preparing',
                       readinessPct: 0,
                       assignedKeeperId: 'emp-keep-1',
                       assignedTechnicianId: 'emp-tech-1',
-                      gps: [baseLat - offset, baseLng],
-                      polygon: [
-                        [baseLat - offset + 0.0002, baseLng - 0.0004],
-                        [baseLat - offset + 0.0002, baseLng + 0.0004],
-                        [baseLat - offset - 0.0002, baseLng + 0.0004],
-                        [baseLat - offset - 0.0002, baseLng - 0.0004],
-                      ],
+                      gps: payload.gps,
+                      polygon: payload.polygon,
+                      geometry: payload.geometry,
+                      rawGpsTrack: payload.rawGpsTrack,
+                      boundarySource: payload.boundarySource,
+                      areaSqm: payload.areaSqm,
+                      waterSurfaceSqm: payload.waterSurfaceSqm,
+                      perimeterM: payload.perimeterM,
+                      boundaryPointsCount: payload.boundaryPointsCount,
+                      mappingMethod: payload.mappingMethod,
+                      gpsAccuracyM: payload.gpsAccuracyM,
+                      boundaryVerified: payload.boundaryVerified,
+                      mappedBy: prev.activeUser.name,
+                      mappedAt: nowTimestamp(),
                       aeratorRelayOn: false,
-                      qrCodeToken: `DUKA-QR-${newP.code}`,
+                      qrCodeToken: `DUKA-QR-${payload.code}`,
                     },
                   ],
+                  infrastructureMarkers: [
+                    ...(prev.infrastructureMarkers || []),
+                    ...payload.infraMarkers.map((dm) => ({
+                      id: `inf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      farmId: payload.farmId,
+                      pondId: newPondId,
+                      pondCode: payload.code,
+                      type: dm.type,
+                      label: `${payload.code} ${dm.type}`,
+                      gps: dm.gps,
+                      status: 'Operational' as const,
+                      createdBy: prev.activeUser.name,
+                      createdAt: todayIso(),
+                    })),
+                  ],
+                  auditLogs: [
+                    {
+                      id: `aud-${Date.now()}`,
+                      timestamp: nowTimestamp(),
+                      actorName: prev.activeUser.name,
+                      actorRole: prev.activeUser.role,
+                      module: 'Farm & GIS Mapping',
+                      action: 'Production Unit Registered',
+                      details: `${payload.code} (${payload.name}) mapped via ${payload.mappingMethod}: ${payload.areaSqm} m², ${payload.perimeterM} m perimeter.`,
+                      pinVerified: false,
+                    },
+                    ...prev.auditLogs,
+                  ],
                 }));
-                showToast(`Registered ${newP.code} (${newP.name}).`);
+                showToast(`Saved ${payload.code} (${payload.areaSqm.toLocaleString()} m²).`);
                 return { ok: true };
               }}
             />
