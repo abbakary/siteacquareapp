@@ -5,6 +5,8 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Fish,
   Loader2,
   Lock,
@@ -45,6 +47,7 @@ import {
   EASE_OUT,
   FormError,
   INPUT_CLASS,
+  Sheet,
   SuccessMoment,
   ValidCheck,
   usePreferences,
@@ -229,6 +232,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
 
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [stepDirection, setStepDirection] = useState<number>(1);
+  const [mobileSummaryOpen, setMobileSummaryOpen] = useState<boolean>(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [celebratingSale, setCelebratingSale] = useState<{
@@ -912,27 +916,30 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
         </motion.div>
       ) : (
         <>
-          {/* 3-STEP GUIDED WIZARD STEPPER */}
+          {/* 3-STEP GUIDED WIZARD STEPPER (Horizontal on mobile & desktop) */}
           <div
             role="tablist"
             aria-label={tr(language, 'Hatua za mchawi wa mauzo', 'Sale wizard steps')}
-            className="grid grid-cols-1 gap-3 md:grid-cols-3"
+            className="grid grid-cols-3 gap-1.5 sm:gap-3"
           >
             {[
               {
                 n: 1 as const,
+                shortTitle: tr(language, '1. Mteja', '1. Customer'),
                 title: tr(language, 'Mteja', 'Customer'),
                 subtitle: tr(language, 'Nani ananunua?', 'Who is buying?'),
                 done: step1Done,
               },
               {
                 n: 2 as const,
+                shortTitle: tr(language, '2. Uzito', '2. Weight'),
                 title: tr(language, 'Samaki na Uzito', 'Fish & Weight'),
                 subtitle: tr(language, 'Aina na kiasi gani?', 'What and how much?'),
                 done: step2Done,
               },
               {
                 n: 3 as const,
+                shortTitle: tr(language, '3. Malipo', '3. Payment'),
                 title: tr(language, 'Malipo na Usafirishaji', 'Payment & Dispatch'),
                 subtitle: tr(language, 'Lipa na tuma mzigo', 'Pay and deliver'),
                 done: false,
@@ -950,7 +957,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                   whileTap={effectiveReducedMotion ? undefined : { scale: 0.99 }}
                   transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
                   onClick={() => goToStep(step.n)}
-                  className={`flex items-center gap-3.5 rounded-2xl border px-4 py-3.5 text-left transition-all ${
+                  className={`flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-center transition-all md:justify-start md:gap-3.5 md:rounded-2xl md:px-4 md:py-3.5 md:text-left ${
                     isCurrent
                       ? 'border-[#0B7E91] bg-white shadow-sm ring-2 ring-[#0B7E91]/15 dark:border-cyan-500 dark:bg-slate-900 dark:ring-cyan-500/20'
                       : isDone
@@ -959,7 +966,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                   }`}
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold transition-colors ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold transition-colors md:h-9 md:w-9 md:text-sm ${
                       isDone
                         ? 'bg-[#17A85C] text-white shadow-xs'
                         : isCurrent
@@ -967,11 +974,11 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           : 'bg-slate-200/85 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                     }`}
                   >
-                    {isDone ? <Check className="h-4.5 w-4.5 stroke-[2.75]" /> : step.n}
+                    {isDone ? <Check className="h-3.5 w-3.5 stroke-[2.75] md:h-4.5 md:w-4.5" /> : step.n}
                   </span>
                   <div className="min-w-0">
                     <div
-                      className={`truncate text-sm font-bold ${
+                      className={`truncate text-[11px] font-bold md:hidden ${
                         isCurrent
                           ? 'text-slate-900 dark:text-white'
                           : 'text-slate-700 dark:text-slate-200'
@@ -979,7 +986,16 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     >
                       {step.title}
                     </div>
-                    <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                    <div
+                      className={`hidden truncate text-sm font-bold md:block ${
+                        isCurrent
+                          ? 'text-slate-900 dark:text-white'
+                          : 'text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      {step.title}
+                    </div>
+                    <div className="hidden truncate text-xs text-slate-500 md:block dark:text-slate-400">
                       {step.subtitle}
                     </div>
                   </div>
@@ -989,7 +1005,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
           </div>
 
           {/* TWO-COLUMN SPACED WORKSPACE */}
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_330px] xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid grid-cols-1 items-start gap-4 pb-24 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_330px] lg:pb-0 xl:grid-cols-[minmax(0,1fr)_360px]">
             {/* LEFT ACTIVE STEP PANEL */}
             <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <AnimatePresence mode="wait" custom={stepDirection}>
@@ -1002,23 +1018,36 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     animate="center"
                     exit="exit"
                     transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
-                    className="space-y-5 p-5 sm:p-7"
+                    className="space-y-3.5 p-3.5 sm:space-y-5 sm:p-7"
                   >
-                    <div>
-                      <h3 className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
-                        {tr(language, 'Nani ananunua?', 'Who is buying?')}
-                      </h3>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {tr(
-                          language,
-                          'Andika jina, namba ya simu au eneo. Chagua kwenye orodha na taarifa zitajazwa kiotomatiki.',
-                          'Type a name, phone number or area. Pick from the list and the details fill in for you.'
-                        )}
-                      </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-display text-base font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
+                          {tr(language, 'Nani ananunua?', 'Who is buying?')}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
+                          {tr(
+                            language,
+                            'Chagua mteja au ongeza mpya — taarifa hujazwa kiotomatiki.',
+                            'Pick a customer or add new — details auto-fill.'
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewCustError('');
+                          setShowNewCustomer(true);
+                        }}
+                        className="inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-xl border border-[#0B7189]/60 bg-white px-3 text-xs font-bold text-[#0B5C73] transition-colors hover:bg-teal-50/70 whitespace-nowrap sm:hidden dark:border-cyan-700 dark:bg-slate-900 dark:text-cyan-300"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>{tr(language, '+ Mpya', '+ New')}</span>
+                      </button>
                     </div>
 
                     {/* Customer Search */}
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <label
                           htmlFor="qs-customer-search"
@@ -1026,26 +1055,26 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                         >
                           {tr(
                             language,
-                            'Tafuta mteja (jina, simu au eneo)',
-                            'Search customer (name, phone or area)'
+                            'Tafuta mteja',
+                            'Search customer'
                           )}
                         </label>
                         <button
                           type="button"
                           onClick={() => setRecentOnly((prev) => !prev)}
-                          className={`text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                          className={`text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 sm:text-xs ${
                             recentOnly
                               ? 'text-[#0B7189] underline dark:text-cyan-400'
                               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                           }`}
                         >
                           {recentOnly
-                            ? tr(language, 'Wateja wa mara kwa mara (Onyesha wote)', 'Showing frequent buyers (Show all)')
-                            : tr(language, 'Chuja wateja wa mara kwa mara', 'Filter frequent buyers')}
+                            ? tr(language, 'Wa mara kwa mara (Onyesha wote)', 'Frequent buyers (Show all)')
+                            : tr(language, 'Wa mara kwa mara tu', 'Frequent buyers only')}
                         </button>
                       </div>
                       <div className="relative">
-                        <Search className="pointer-events-none absolute top-3.5 left-3.5 h-4 w-4 text-slate-400" />
+                        <Search className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-slate-400 sm:top-3.5 sm:left-3.5" />
                         <input
                           id="qs-customer-search"
                           type="text"
@@ -1053,17 +1082,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           onChange={(e) => setCustomerSearch(e.target.value)}
                           placeholder={tr(
                             language,
-                            'Tafuta kwa jina la mteja, simu +255, au eneo la soko...',
-                            'Search by customer name, +255 phone, or market area...'
+                            'Jina la mteja, simu +255, au eneo...',
+                            'Customer name, +255 phone, or area...'
                           )}
-                          className={`${INPUT_CLASS} min-h-[46px] pl-10 pr-9 text-sm`}
+                          className={`${INPUT_CLASS} min-h-[42px] pl-9 pr-9 text-sm sm:min-h-[46px] sm:pl-10`}
                         />
                         {customerSearch && (
                           <button
                             type="button"
                             onClick={() => setCustomerSearch('')}
                             aria-label={tr(language, 'Futa utafutaji wa mteja', 'Clear customer search')}
-                            className="absolute top-3 right-3 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                            className="absolute top-2.5 right-2.5 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 sm:top-3 sm:right-3 dark:hover:bg-slate-800"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -1072,19 +1101,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     </div>
 
                     {/* Selectable Customer Cards */}
-                    <div className="max-h-[280px] space-y-2.5 overflow-y-auto pr-1">
+                    <div className="max-h-[210px] space-y-2 overflow-y-auto pr-0.5 sm:max-h-[280px] sm:space-y-2.5 sm:pr-1">
                       {filteredCustomers.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                        <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
                           {tr(language, 'Hakuna mteja anayelingana na', 'No customer matches')} &ldquo;{customerSearch}&rdquo;.{' '}
-                          {tr(language, 'Tumia', 'Use')}{' '}
                           <button
                             type="button"
                             onClick={() => setShowNewCustomer(true)}
                             className="font-bold text-[#0B7189] underline dark:text-cyan-400"
                           >
                             {tr(language, '+ Mteja Mpya', '+ New customer')}
-                          </button>{' '}
-                          {tr(language, 'hapa chini.', 'below.')}
+                          </button>
                         </div>
                       ) : (
                         filteredCustomers.map((c) => {
@@ -1096,7 +1123,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                               type="button"
                               whileTap={effectiveReducedMotion ? undefined : { scale: 0.995 }}
                               onClick={() => handleSelectCustomer(c)}
-                              className={`flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all sm:flex-nowrap ${
+                              className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-all sm:px-4 sm:py-3 ${
                                 isSel
                                   ? 'border-[#0D8A9E] bg-[#F2FAFB] ring-1 ring-[#0D8A9E]/30 dark:border-cyan-500 dark:bg-cyan-950/30 dark:ring-cyan-500/30'
                                   : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60'
@@ -1106,18 +1133,29 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                 <div className="truncate text-sm font-bold text-slate-900 dark:text-white">
                                   {c.name}
                                 </div>
-                                <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                                <div className="mt-0.5 truncate text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
                                   {tDomain(language, c.priceTier)} · {formatTzPhoneDisplay(c.phone)} · {c.location}
+                                </div>
+                                <div className="mt-0.5 text-[11px] font-semibold tabular-nums sm:hidden">
+                                  {debt > 0 ? (
+                                    <span className="text-orange-700 dark:text-orange-300">
+                                      {tr(language, 'Anadaiwa', 'Owes')} {formatTzs(debt)} · {tr(language, 'ukomo', 'limit')} {formatNumber(c.creditLimitTzs)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-700 dark:text-emerald-300">
+                                      {tr(language, 'Mkopo Sawa', 'Credit OK')} · {tr(language, 'ukomo', 'limit')} {formatTzs(c.creditLimitTzs)}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-2.5">
+                              <div className="flex shrink-0 items-center gap-2">
                                 {debt > 0 ? (
-                                  <span className="rounded-lg bg-orange-100/90 px-2.5 py-1 text-xs font-semibold text-orange-800 tabular-nums dark:bg-orange-950/70 dark:text-orange-300">
+                                  <span className="hidden rounded-lg bg-orange-100/90 px-2.5 py-1 text-xs font-semibold text-orange-800 tabular-nums sm:inline-block dark:bg-orange-950/70 dark:text-orange-300">
                                     {tr(language, 'Anadaiwa', 'Owes')} {formatTzs(debt)} · {tr(language, 'ukomo', 'limit')} {formatNumber(c.creditLimitTzs)}
                                   </span>
                                 ) : (
-                                  <span className="rounded-lg bg-emerald-100/80 px-2.5 py-1 text-xs font-semibold text-emerald-800 tabular-nums dark:bg-emerald-950/70 dark:text-emerald-300">
+                                  <span className="hidden rounded-lg bg-emerald-100/80 px-2.5 py-1 text-xs font-semibold text-emerald-800 tabular-nums sm:inline-block dark:bg-emerald-950/70 dark:text-emerald-300">
                                     {tr(language, 'Mkopo Sawa', 'Credit OK')} · {tr(language, 'ukomo', 'limit')} {formatTzs(c.creditLimitTzs)}
                                   </span>
                                 )}
@@ -1133,147 +1171,89 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       )}
                     </div>
 
-                    {/* Auto-filled Customer Details (2x2 grid matching design) */}
+                    {/* Compact Selected Customer Summary on Mobile (replaces 4 stacked boxes) */}
                     {selectedCustomer && (
-                      <div className="grid grid-cols-1 gap-3.5 pt-1 sm:grid-cols-2">
-                        <div>
-                          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span>{tr(language, 'Jina la mteja', 'Customer name')}</span>
+                      <>
+                        <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] p-3 text-xs sm:hidden dark:border-cyan-900/60 dark:bg-cyan-950/30">
+                          <div className="mb-1.5 flex items-center justify-between gap-2">
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {selectedCustomer.name}
+                            </span>
                             <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
                               {tr(language, 'Otomatiki', 'Auto')}
                             </span>
                           </div>
-                          <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
-                            {selectedCustomer.name}
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                            <div className="truncate font-mono tabular-nums">
+                              {formatTzPhoneDisplay(selectedCustomer.phone)}
+                            </div>
+                            <div className="truncate text-right font-semibold text-[#0B5C73] dark:text-cyan-300">
+                              {tDomain(language, selectedCustomer.priceTier)}
+                            </div>
+                            <div className="col-span-2 truncate text-slate-500 dark:text-slate-400">
+                              {selectedCustomer.location}
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span>{tr(language, 'Namba ya simu', 'Phone number')}</span>
-                            <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                              {tr(language, 'Otomatiki', 'Auto')}
-                            </span>
+
+                        {/* Desktop 2x2 Auto-filled Customer Details */}
+                        <div className="hidden grid-cols-2 gap-3.5 pt-1 sm:grid">
+                          <div>
+                            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              <span>{tr(language, 'Jina la mteja', 'Customer name')}</span>
+                              <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                {tr(language, 'Otomatiki', 'Auto')}
+                              </span>
+                            </div>
+                            <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                              {selectedCustomer.name}
+                            </div>
                           </div>
-                          <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 font-mono text-sm font-medium text-slate-900 tabular-nums dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
-                            {formatTzPhoneDisplay(selectedCustomer.phone)}
+                          <div>
+                            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              <span>{tr(language, 'Namba ya simu', 'Phone number')}</span>
+                              <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                {tr(language, 'Otomatiki', 'Auto')}
+                              </span>
+                            </div>
+                            <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 font-mono text-sm font-medium text-slate-900 tabular-nums dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                              {formatTzPhoneDisplay(selectedCustomer.phone)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              <span>{tr(language, 'Aina ya mteja', 'Customer type')}</span>
+                              <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                {tr(language, 'Otomatiki', 'Auto')}
+                              </span>
+                            </div>
+                            <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                              {tDomain(language, selectedCustomer.priceTier)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              <span>{tr(language, 'Eneo', 'Area')}</span>
+                              <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                {tr(language, 'Otomatiki', 'Auto')}
+                              </span>
+                            </div>
+                            <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                              {selectedCustomer.location}
+                            </div>
                           </div>
                         </div>
-                        <div>
-                          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span>{tr(language, 'Aina ya mteja', 'Customer type')}</span>
-                            <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                              {tr(language, 'Otomatiki', 'Auto')}
-                            </span>
-                          </div>
-                          <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
-                            {tDomain(language, selectedCustomer.priceTier)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span>{tr(language, 'Eneo', 'Area')}</span>
-                            <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
-                              {tr(language, 'Otomatiki', 'Auto')}
-                            </span>
-                          </div>
-                          <div className="rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 py-2.5 text-sm font-medium text-slate-900 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
-                            {selectedCustomer.location}
-                          </div>
-                        </div>
-                      </div>
+                      </>
                     )}
 
-                    {/* Inline Quick Add Customer Drawer */}
-                    <AnimatePresence initial={false}>
-                      {showNewCustomer && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
-                          className="overflow-hidden"
-                        >
-                          <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/50 p-4 dark:border-cyan-900/60 dark:bg-cyan-950/25">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                {tr(language, 'Sajili Mteja Haraka', 'Quick Register Customer')}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setShowNewCustomer(false)}
-                                className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400"
-                              >
-                                {tr(language, 'Funga', 'Close')}
-                              </button>
-                            </div>
-                            <FormError message={newCustError} shakeKey={newCustShake} />
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              <div>
-                                <label
-                                  htmlFor="qs-new-cust-name"
-                                  className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
-                                >
-                                  <span>{tr(language, 'Jina *', 'Name *')}</span>
-                                  <ValidCheck valid={newCustName.trim().length > 1} />
-                                </label>
-                                <input
-                                  id="qs-new-cust-name"
-                                  type="text"
-                                  value={newCustName}
-                                  onChange={(e) => setNewCustName(e.target.value)}
-                                  placeholder={tr(
-                                    language,
-                                    'mf. Zanzibar Fresh Traders',
-                                    'e.g. Zanzibar Fresh Traders'
-                                  )}
-                                  className={`${INPUT_CLASS} min-h-[42px] text-sm`}
-                                />
-                              </div>
-                              <div>
-                                <label
-                                  htmlFor="qs-new-cust-phone"
-                                  className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
-                                >
-                                  <span>{tr(language, 'Simu (07... / 255...) *', 'Phone (07... / 255...) *')}</span>
-                                  <ValidCheck valid={Boolean(normalizeTzPhone(newCustPhone))} />
-                                </label>
-                                <input
-                                  id="qs-new-cust-phone"
-                                  type="tel"
-                                  inputMode="tel"
-                                  value={newCustPhone}
-                                  onChange={(e) => setNewCustPhone(e.target.value)}
-                                  placeholder="0712 345 678"
-                                  className={`${INPUT_CLASS} min-h-[42px] font-mono text-sm`}
-                                />
-                              </div>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setShowNewCustomer(false)}
-                              >
-                                {tr(language, 'Ghairi', 'Cancel')}
-                              </Button>
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={handleAddNewCustomer}
-                              >
-                                {tr(language, 'Hifadhi na Chagua', 'Save & Select')}
-                              </Button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Step 1 Action Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                    {/* Step 1 Action Bar (Desktop / Tablet; mobile uses sticky POS dock) */}
+                    <div className="hidden flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 lg:flex dark:border-slate-800">
                       <button
                         type="button"
-                        onClick={() => setShowNewCustomer((prev) => !prev)}
+                        onClick={() => {
+                          setNewCustError('');
+                          setShowNewCustomer(true);
+                        }}
                         className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-[#0B7189]/60 bg-white px-4 text-sm font-bold text-[#0B5C73] transition-colors hover:bg-teal-50/70 whitespace-nowrap shrink-0 dark:border-cyan-700 dark:bg-slate-900 dark:text-cyan-300 dark:hover:bg-slate-800"
                       >
                         <UserPlus className="h-4 w-4" />
@@ -1302,23 +1282,23 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     animate="center"
                     exit="exit"
                     transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
-                    className="space-y-5 p-5 sm:p-7"
+                    className="space-y-3.5 p-3.5 sm:space-y-5 sm:p-7"
                   >
                     <div>
-                      <h3 className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
+                      <h3 className="font-display text-base font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
                         {tr(language, 'Unauza nini?', 'What are you selling?')}
                       </h3>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
                         {tr(
                           language,
-                          'Chagua chanzo. Aina ya samaki, kundi la mavuno na bei vitajazwa kiotomatiki.',
-                          'Choose the source. Species, harvest lot and price fill in automatically.'
+                          'Chagua chanzo. Spishi na bei hujazwa kiotomatiki.',
+                          'Choose source. Species and price auto-fill.'
                         )}
                       </p>
                     </div>
 
-                    {/* Source Mode Toggle */}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {/* Source Mode Toggle (2-column compact on mobile) */}
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -1326,14 +1306,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           setWeighError('');
                           setPriceManuallyEdited(false);
                         }}
-                        className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition-all whitespace-nowrap ${
+                        className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition-all sm:min-h-[46px] sm:gap-2 sm:px-4 sm:text-sm ${
                           sourceMode === 'pond'
                             ? 'border-[#0B7189] bg-[#0B7189] text-white shadow-xs'
                             : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
                         }`}
                       >
-                        <Sprout className="h-4 w-4 shrink-0" />
-                        <span>
+                        <Sprout className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                        <span className="truncate sm:hidden">
+                          {tr(language, `Bwawani (${activePonds.length})`, `From Pond (${activePonds.length})`)}
+                        </span>
+                        <span className="hidden truncate sm:inline">
                           {tr(
                             language,
                             `Moja kwa moja kutoka bwawani (mabwawa ${activePonds.length} tayari)`,
@@ -1349,14 +1332,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           setWeighError('');
                           setPriceManuallyEdited(false);
                         }}
-                        className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold transition-all whitespace-nowrap ${
+                        className={`flex min-h-[42px] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition-all sm:min-h-[46px] sm:gap-2 sm:px-4 sm:text-sm ${
                           sourceMode === 'lot'
                             ? 'border-[#0B7189] bg-[#0B7189] text-white shadow-xs'
                             : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
                         }`}
                       >
-                        <Fish className="h-4 w-4 shrink-0" />
-                        <span>
+                        <Fish className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                        <span className="truncate sm:hidden">
+                          {tr(language, `Akiba (${availableLots.length})`, `From Stock (${availableLots.length})`)}
+                        </span>
+                        <span className="hidden truncate sm:inline">
                           {tr(
                             language,
                             `Kutoka akiba (makundi ${availableLots.length})`,
@@ -1367,17 +1353,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     </div>
 
                     {/* Pond / Harvest Lot + Auto Lot Ref */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-4">
                       {sourceMode === 'pond' ? (
                         <div>
                           <label
                             htmlFor="qs-pond-select"
-                            className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300"
+                            className="mb-1 block text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                           >
                             {tr(
                               language,
-                              'Bwawa (kundi huundwa ukithibitisha)',
-                              'Pond (lot is created when you confirm)'
+                              'Bwawa',
+                              'Pond'
                             )}
                           </label>
                           <select
@@ -1388,7 +1374,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                               setWeighError('');
                               setPriceManuallyEdited(false);
                             }}
-                            className={`${INPUT_CLASS} min-h-[46px] text-sm font-semibold`}
+                            className={`${INPUT_CLASS} min-h-[42px] text-sm font-semibold sm:min-h-[46px]`}
                           >
                             {activePonds.map((p) => (
                               <option key={p.id} value={p.code}>
@@ -1399,12 +1385,12 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           </select>
                         </div>
                       ) : availableLots.length === 0 ? (
-                        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
                           <span>
                             {tr(
                               language,
-                              'Hakuna makundi ya mavuno baridi kwenye akiba sasa hivi.',
-                              'No chilled harvest lots in stock right now.'
+                              'Hakuna makundi kwenye akiba.',
+                              'No chilled harvest lots in stock.'
                             )}
                           </span>
                           <button
@@ -1419,12 +1405,12 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                         <div>
                           <label
                             htmlFor="qs-lot-select"
-                            className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300"
+                            className="mb-1 block text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                           >
                             {tr(
                               language,
-                              'Kundi la mavuno (hupunguzwa ukithibitisha)',
-                              'Harvest lot (deducts on confirm)'
+                              'Kundi la mavuno',
+                              'Harvest lot'
                             )}
                           </label>
                           <select
@@ -1435,7 +1421,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                               setWeighError('');
                               setPriceManuallyEdited(false);
                             }}
-                            className={`${INPUT_CLASS} min-h-[46px] text-sm font-semibold`}
+                            className={`${INPUT_CLASS} min-h-[42px] text-sm font-semibold sm:min-h-[46px]`}
                           >
                             {availableLots.map((l) => (
                               <option key={l.id} value={l.id}>
@@ -1448,22 +1434,22 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       )}
 
                       <div>
-                        <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                          <span>{tr(language, 'Kundi la mavuno · tarehe', 'Harvest lot · date')}</span>
+                        <div className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300">
+                          <span>{tr(language, 'Kundi · tarehe', 'Lot · date')}</span>
                           <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {tr(language, 'Otomatiki', 'Auto')}
                           </span>
                         </div>
-                        <div className="flex min-h-[46px] items-center rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 text-sm font-semibold text-slate-900 tabular-nums dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                        <div className="flex min-h-[40px] items-center rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-xs font-semibold text-slate-900 tabular-nums sm:min-h-[46px] sm:px-3.5 sm:text-sm dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
                           {previewLotText}
                         </div>
                       </div>
                     </div>
 
-                    {/* Fish Size (Grade) Selector */}
+                    {/* Fish Size (Grade) Selector — 3 columns side-by-side on mobile */}
                     <div>
-                      <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>{tr(language, 'Ukubwa wa samaki (daraja)', 'Fish size (grade)')}</span>
+                      <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 sm:mb-2 dark:text-slate-300">
+                        <span>{tr(language, 'Ukubwa (daraja)', 'Fish size (grade)')}</span>
                         <span className="font-medium text-slate-500 dark:text-slate-400">
                           {tr(
                             language,
@@ -1472,7 +1458,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           )}
                         </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
                         {GRADES.map((g) => {
                           const avail = getAvailableKgForSelected(g);
                           const tierPrice =
@@ -1495,26 +1481,25 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                 setWeighError('');
                                 setPriceManuallyEdited(false);
                               }}
-                              className={`relative rounded-xl border p-3.5 text-left transition-all ${
+                              className={`relative rounded-xl border p-2.5 text-left transition-all sm:p-3.5 ${
                                 active
                                   ? 'border-[#0D8A9E] bg-[#F2FAFB] ring-1 ring-[#0D8A9E]/30 dark:border-cyan-500 dark:bg-cyan-950/30'
                                   : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60'
                               }`}
                             >
                               {active && (
-                                <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#0B7E91] text-white">
-                                  <Check className="h-3 w-3 stroke-[3]" />
+                                <span className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#0B7E91] text-white sm:top-3 sm:right-3 sm:h-5 sm:w-5">
+                                  <Check className="h-2.5 w-2.5 stroke-[3] sm:h-3 sm:w-3" />
                                 </span>
                               )}
-                              <div className="text-sm font-bold text-slate-900 dark:text-white">
+                              <div className="pr-4 text-xs font-bold text-slate-900 sm:text-sm dark:text-white">
                                 {renderGradeLabel(g)}
                               </div>
-                              <div className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                                {formatNumber(Math.round(avail))} kg{' '}
-                                {tr(language, 'zinapatikana', 'available')}
+                              <div className="mt-0.5 text-[10.5px] text-slate-500 tabular-nums sm:mt-1 sm:text-xs dark:text-slate-400">
+                                {formatNumber(Math.round(avail))} kg
                               </div>
-                              <div className="mt-1 text-xs font-extrabold text-[#0B7189] tabular-nums dark:text-cyan-400">
-                                {formatTzs(tierPrice)} {tr(language, 'kwa kg', 'per kg')}
+                              <div className="mt-0.5 text-[11px] font-extrabold text-[#0B7189] tabular-nums sm:mt-1 sm:text-xs dark:text-cyan-400">
+                                {formatTzs(tierPrice)}
                               </div>
                             </motion.button>
                           );
@@ -1523,13 +1508,13 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     </div>
 
                     {/* Weight, Fish Count, Auto Price & Live Line Total */}
-                    <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[0.9fr_1fr_0.95fr_1.35fr]">
+                    <div className="grid grid-cols-2 items-end gap-2.5 sm:gap-3 xl:grid-cols-[0.9fr_1fr_0.95fr_1.35fr]">
                       <div>
                         <label
                           htmlFor="qs-weight-kg"
-                          className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 flex items-center justify-between text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
-                          <span>{tr(language, 'Uzito (kilogramu)', 'Weight (kilograms)')}</span>
+                          <span>{tr(language, 'Uzito (kg)', 'Weight (kg)')}</span>
                           <ValidCheck
                             valid={
                               Number(kgInput) > 0 &&
@@ -1550,16 +1535,16 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                             setKgInput(e.target.value);
                             setWeighError('');
                           }}
-                          className={`${INPUT_CLASS} min-h-[46px] text-base font-bold tabular-nums`}
+                          className={`${INPUT_CLASS} min-h-[44px] text-base font-bold tabular-nums sm:min-h-[46px]`}
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="qs-fish-count"
-                          className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 block truncate text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
-                          {tr(language, 'Idadi ya samaki (si lazima)', 'Number of fish (optional)')}
+                          {tr(language, 'Idadi (si lazima)', 'Fish count (opt.)')}
                         </label>
                         <input
                           id="qs-fish-count"
@@ -1569,16 +1554,16 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           placeholder="0"
                           value={countInput}
                           onChange={(e) => setCountInput(e.target.value)}
-                          className={`${INPUT_CLASS} min-h-[46px] text-base font-bold tabular-nums`}
+                          className={`${INPUT_CLASS} min-h-[44px] text-base font-bold tabular-nums sm:min-h-[46px]`}
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="qs-price-per-kg"
-                          className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
-                          <span>{tr(language, 'Bei kwa kg', 'Price per kg')}</span>
+                          <span>{tr(language, 'Bei / kg', 'Price / kg')}</span>
                           <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {tr(language, 'Otomatiki', 'Auto')}
                           </span>
@@ -1594,22 +1579,20 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                               setPriceManuallyEdited(true);
                               setCustomPriceInput(e.target.value);
                             }}
-                            className="min-h-[46px] w-full rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-sm font-bold text-slate-900 tabular-nums focus:border-[#0B7E91] focus:outline-none dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white"
+                            className="min-h-[44px] w-full rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-sm font-bold text-slate-900 tabular-nums focus:border-[#0B7E91] focus:outline-none sm:min-h-[46px] dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white"
                           />
                         ) : (
-                          <div className="flex min-h-[46px] items-center rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-sm font-bold text-slate-900 tabular-nums dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
+                          <div className="flex min-h-[44px] items-center rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-sm font-bold text-slate-900 tabular-nums sm:min-h-[46px] dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white">
                             {formatTzs(activeDraftPricePerKg)}
                           </div>
                         )}
                       </div>
 
-                      <div className="flex min-h-[60px] flex-col justify-center rounded-xl bg-gradient-to-br from-[#062246] via-[#074470] to-[#087786] px-4 py-2 text-white shadow-sm">
-                        <div className="text-[11px] font-medium text-sky-100/90 tabular-nums">
-                          {tr(language, 'Jumla ya mstari', 'Line total')} ·{' '}
-                          {tr(language, 'wastani', 'avg')} {draftAvgKgPerFish.toFixed(2)} kg{' '}
-                          {tr(language, 'kwa samaki', 'per fish')}
+                      <div className="flex min-h-[44px] flex-col justify-center rounded-xl bg-gradient-to-br from-[#062246] via-[#074470] to-[#087786] px-3 py-1.5 text-white shadow-sm sm:min-h-[60px] sm:px-4 sm:py-2">
+                        <div className="truncate text-[10.5px] font-medium text-sky-100/90 tabular-nums sm:text-[11px]">
+                          {tr(language, 'Mstari', 'Line total')} · {draftAvgKgPerFish.toFixed(2)} kg
                         </div>
-                        <div className="font-display text-xl font-extrabold text-amber-300 tabular-nums">
+                        <div className="font-display text-base font-extrabold text-amber-300 tabular-nums sm:text-xl">
                           {formatTzs(draftLineTotalTzs)}
                         </div>
                       </div>
@@ -1621,13 +1604,13 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     <button
                       type="button"
                       onClick={handleAddWeighing}
-                      className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#14A45B] to-[#1EB866] px-4 text-sm font-extrabold text-white shadow-xs transition-all hover:brightness-105 active:scale-[0.995]"
+                      className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#14A45B] to-[#1EB866] px-4 text-sm font-extrabold text-white shadow-xs transition-all hover:brightness-105 active:scale-[0.995]"
                     >
                       <Plus className="h-4 w-4 stroke-[2.5]" />
                       <span>
                         {tr(
                           language,
-                          `Ongeza ${activeSpecies} (${renderGradeLabel(grade)}) kwenye mauzo`,
+                          `Ongeza ${activeSpecies} (${renderGradeLabel(grade)})`,
                           `Add ${grade} ${activeSpecies} to sale`
                         )}
                       </span>
@@ -1635,7 +1618,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
 
                     {/* Added Lines Summary Box */}
                     {lines.length > 0 && (
-                      <div className="rounded-xl border border-slate-200/90 bg-slate-50/75 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+                      <div className="rounded-xl border border-slate-200/90 bg-slate-50/75 p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-800/40">
                         <div className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-300">
                           {tr(language, 'Vilivyoongezwa kwenye mauzo haya', 'Added to this sale')}
                         </div>
@@ -1649,7 +1632,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
-                                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-3.5 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-xs sm:px-3.5 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
                               >
                                 <div className="min-w-0 truncate text-slate-800 dark:text-slate-200">
                                   <span className="font-semibold">{ln.species}</span> ·{' '}
@@ -1658,14 +1641,11 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                   {ln.count > 0 && (
                                     <span className="tabular-nums">
                                       {' '}
-                                      · {ln.count} {tr(language, 'samaki', 'fish')}
+                                      · {ln.count}
                                     </span>
                                   )}
-                                  <span className="ml-2 text-xs text-slate-400">
-                                    ({ln.lotCode || ln.pondCode})
-                                  </span>
                                 </div>
-                                <div className="flex shrink-0 items-center gap-2">
+                                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                                   <span className="font-bold text-slate-900 tabular-nums dark:text-white">
                                     {formatTzs(roundTzs(ln.kg * ln.pricePerKgTzs))}
                                   </span>
@@ -1691,22 +1671,22 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       </div>
                     )}
 
-                    {/* Step 2 Navigation Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                    {/* Step 2 Navigation Bar (Desktop Next; mobile uses sticky POS dock for Next) */}
+                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 sm:pt-4 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => goToStep(1)}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0 sm:min-h-[44px] sm:px-5 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         <ArrowLeft className="h-4 w-4" />
-                        <span>{tr(language, 'Rudi', 'Back')}</span>
+                        <span>{tr(language, 'Rudi kwa Mteja', 'Back to Customer')}</span>
                       </button>
 
                       <button
                         type="button"
                         disabled={lines.length === 0}
                         onClick={() => goToStep(3)}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-gradient-to-r from-[#095580] to-[#0B7E91] px-6 text-sm font-bold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-50 whitespace-nowrap shrink-0"
+                        className="hidden min-h-[44px] items-center gap-2 rounded-xl bg-gradient-to-r from-[#095580] to-[#0B7E91] px-6 text-sm font-bold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-50 whitespace-nowrap shrink-0 lg:inline-flex"
                       >
                         <span>
                           {tr(language, 'Inayofuata: Malipo na Usafirishaji', 'Next: Payment & Dispatch')}
@@ -1726,27 +1706,27 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     animate="center"
                     exit="exit"
                     transition={{ duration: DURATIONS.base, ease: EASE_OUT }}
-                    className="space-y-5 p-5 sm:p-7"
+                    className="space-y-3.5 p-3.5 sm:space-y-5 sm:p-7"
                   >
                     <div>
-                      <h3 className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
+                      <h3 className="font-display text-base font-extrabold tracking-tight text-slate-900 sm:text-2xl dark:text-white">
                         {tr(language, 'Atalipa na kupokeaje?', 'How will they pay and receive?')}
                       </h3>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm dark:text-slate-400">
                         {tr(
                           language,
-                          'Chagua njia ya malipo, weka kiasi, kisha panga usafirishaji.',
-                          'Pick a payment method, enter the amount, then set delivery.'
+                          'Chagua njia ya malipo, weka kiasi na usafirishaji.',
+                          'Pick payment method, amount and delivery.'
                         )}
                       </p>
                     </div>
 
                     {/* Payment Method 4x2 Grid */}
                     <div>
-                      <div className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <div className="mb-1.5 text-xs font-bold text-slate-700 sm:mb-2 dark:text-slate-300">
                         {tr(language, 'Njia ya malipo', 'Payment method')}
                       </div>
-                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
                         {PAYMENT_OPTIONS.map((opt) => {
                           const isSelected = opt.isCredit
                             ? creditPayLater
@@ -1769,7 +1749,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                   }
                                 }
                               }}
-                              className={`flex min-h-[46px] items-center justify-between gap-2 rounded-xl border px-3.5 text-left text-xs font-bold transition-all sm:text-sm ${
+                              className={`flex min-h-[42px] items-center justify-between gap-1.5 rounded-xl border px-3 text-left text-xs font-bold transition-all sm:min-h-[46px] sm:gap-2 sm:px-3.5 sm:text-sm ${
                                 isSelected
                                   ? 'border-[#0D8A9E] bg-[#F2FAFB] text-slate-900 ring-1 ring-[#0D8A9E]/30 dark:border-cyan-500 dark:bg-cyan-950/30 dark:text-white'
                                   : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
@@ -1779,8 +1759,8 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                                 {language === 'sw' ? opt.swLabel : opt.enLabel}
                               </span>
                               {isSelected && (
-                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0B7E91] text-white">
-                                  <Check className="h-3 w-3 stroke-[3]" />
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0B7E91] text-white sm:h-5 sm:w-5">
+                                  <Check className="h-2.5 w-2.5 stroke-[3] sm:h-3 sm:w-3" />
                                 </span>
                               )}
                             </button>
@@ -1790,11 +1770,11 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     </div>
 
                     {/* Amount Paid Now + Payment Reference */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                       <div>
                         <label
                           htmlFor="qs-paid-amount"
-                          className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 flex items-center justify-between text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
                           <span>{tr(language, 'Kiasi kilicholipwa sasa (TZS)', 'Amount paid now (TZS)')}</span>
                           <ValidCheck
@@ -1814,9 +1794,9 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                             setCreditPayLater(Number(e.target.value) === 0);
                             setPaidInput(e.target.value);
                           }}
-                          className={`${INPUT_CLASS} min-h-[46px] text-base font-bold tabular-nums`}
+                          className={`${INPUT_CLASS} min-h-[44px] text-base font-bold tabular-nums sm:min-h-[46px]`}
                         />
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -1856,12 +1836,12 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       <div>
                         <label
                           htmlFor="qs-pay-ref"
-                          className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 block text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
                           {tr(
                             language,
-                            'Kumbukumbu ya malipo (simu au benki)',
-                            'Payment reference (mobile money or bank)'
+                            'Kumbukumbu ya malipo (simu / benki)',
+                            'Payment reference (mobile / bank)'
                           )}
                         </label>
                         <input
@@ -1871,17 +1851,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           onChange={(e) => setPaymentReference(e.target.value)}
                           placeholder={tr(
                             language,
-                            'Namba ya muamala, mf. MPESA TRX123456',
-                            'Transaction ID, for example MPESA TRX123456'
+                            'mf. MPESA TRX123456',
+                            'e.g. MPESA TRX123456'
                           )}
-                          className={`${INPUT_CLASS} min-h-[46px] text-sm`}
+                          className={`${INPUT_CLASS} min-h-[44px] text-sm sm:min-h-[46px]`}
                         />
                       </div>
                     </div>
 
                     {/* Manager Discount + Conditional PIN */}
                     {(perms.canOverrideSalePrice || pinRequired) && (
-                      <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 sm:grid-cols-3 dark:border-slate-800 dark:bg-slate-800/40">
+                      <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 sm:grid-cols-3 sm:p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
                         {perms.canOverrideSalePrice && (
                           <>
                             <div>
@@ -1953,12 +1933,12 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       </div>
                     )}
 
-                    {/* Delivery Status Segmented Buttons */}
+                    {/* Delivery Status Segmented Buttons — 3 cols side-by-side on mobile */}
                     <div>
-                      <div className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <div className="mb-1.5 text-xs font-bold text-slate-700 sm:mb-2 dark:text-slate-300">
                         {tr(language, 'Hali ya uwasilishaji', 'Delivery status')}
                       </div>
-                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
                         {DELIVERY_STATUS_OPTIONS.map((st) => {
                           const active = deliveryStatus === st.value;
                           return (
@@ -1966,7 +1946,7 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                               key={st.value}
                               type="button"
                               onClick={() => setDeliveryStatus(st.value)}
-                              className={`min-h-[44px] rounded-xl border px-4 text-sm font-bold transition-all whitespace-nowrap ${
+                              className={`min-h-[42px] rounded-xl border px-2 text-[11px] font-bold transition-all sm:min-h-[44px] sm:px-4 sm:text-sm ${
                                 active
                                   ? 'border-[#0B7189] bg-[#0B7189] text-white shadow-xs'
                                   : 'border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
@@ -1980,11 +1960,11 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                     </div>
 
                     {/* Delivery Address + Vehicle & Driver */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                       <div>
                         <label
                           htmlFor="qs-del-address"
-                          className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
                           <span>{tr(language, 'Anwani ya uwasilishaji', 'Delivery address')}</span>
                           <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -1997,26 +1977,26 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
                           placeholder={tr(language, 'Weka anwani ya uwasilishaji...', 'Enter delivery address...')}
-                          className="min-h-[46px] w-full rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3.5 text-sm font-medium text-slate-900 focus:border-[#0B7E91] focus:outline-none dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white"
+                          className="min-h-[42px] w-full rounded-xl border border-[#BCE3E8] bg-[#EFF8F9] px-3 text-sm font-medium text-slate-900 focus:border-[#0B7E91] focus:outline-none sm:min-h-[46px] sm:px-3.5 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-white"
                         />
                       </div>
 
                       <div>
                         <label
                           htmlFor="qs-del-vehicle"
-                          className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-300"
+                          className="mb-1 block text-xs font-bold text-slate-700 sm:mb-1.5 dark:text-slate-300"
                         >
                           {tr(
                             language,
-                            'Gari na dereva (chagua kwenye orodha)',
-                            'Vehicle and driver (pick from list)'
+                            'Gari na dereva',
+                            'Vehicle and driver'
                           )}
                         </label>
                         <select
                           id="qs-del-vehicle"
                           value={vehiclePreset}
                           onChange={(e) => setVehiclePreset(e.target.value)}
-                          className={`${INPUT_CLASS} min-h-[46px] text-sm font-medium`}
+                          className={`${INPUT_CLASS} min-h-[42px] text-sm font-medium sm:min-h-[46px]`}
                         >
                           {FLEET_VEHICLE_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -2043,27 +2023,17 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
                       </div>
                     </div>
 
+                    <FormError message={submitError} shakeKey={submitShake} className="lg:hidden" />
+
                     {/* Step 3 Footer */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3 sm:pt-4 dark:border-slate-800">
                       <button
                         type="button"
                         onClick={() => goToStep(2)}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0 sm:min-h-[44px] sm:px-5 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         <ArrowLeft className="h-4 w-4" />
-                        <span>{tr(language, 'Rudi', 'Back')}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={handleConfirm}
-                        className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-gradient-to-r from-[#14A45B] to-[#1EB866] px-5 text-sm font-extrabold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-55 lg:hidden"
-                      >
-                        <Check className="h-4 w-4" />
-                        <span>
-                          {tr(language, 'Thibitisha mauzo na toa risiti', 'Confirm sale & issue receipt')}
-                        </span>
+                        <span>{tr(language, 'Rudi kwenye Uzito', 'Back to Fish & Weight')}</span>
                       </button>
                     </div>
                   </motion.div>
@@ -2071,10 +2041,10 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
               </AnimatePresence>
             </div>
 
-            {/* RIGHT PERSISTENT STICKY SALE SUMMARY PANEL */}
+            {/* RIGHT PERSISTENT STICKY SALE SUMMARY PANEL (Desktop / Large Tablet) */}
             <aside
               aria-label={tr(language, 'Muhtasari wa mauzo', 'Sale summary')}
-              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:sticky lg:top-24 dark:border-slate-800 dark:bg-slate-900 sm:p-6"
+              className="hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:sticky lg:top-24 lg:block dark:border-slate-800 dark:bg-slate-900 sm:p-6"
             >
               <h3 className="font-display text-lg font-extrabold text-slate-900 dark:text-white">
                 {tr(language, 'Muhtasari wa mauzo', 'Sale summary')}
@@ -2228,8 +2198,249 @@ export const QuickSaleFlow: React.FC<QuickSaleFlowProps> = ({
               )}
             </aside>
           </div>
+
+          {/* MOBILE EXPANDABLE SUMMARY DRAWER + STICKY POS CHECKOUT DOCK */}
+          <div className="lg:hidden">
+            <AnimatePresence>
+              {mobileSummaryOpen && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setMobileSummaryOpen(false)}
+                    className="fixed inset-0 z-20 bg-slate-950/40 backdrop-blur-[1px]"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 24 }}
+                    transition={{ duration: DURATIONS.fast, ease: EASE_OUT }}
+                    className="fixed inset-x-0 bottom-[126px] z-30 mx-2.5 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div className="mb-2.5 flex items-center justify-between">
+                      <h4 className="font-display text-sm font-extrabold text-slate-900 dark:text-white">
+                        {tr(language, 'Muhtasari wa Mauzo', 'Sale Summary')}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setMobileSummaryOpen(false)}
+                        aria-label={tr(language, 'Funga muhtasari', 'Close summary')}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {selectedCustomer && (
+                      <div className="mb-3 rounded-xl bg-sky-50/80 px-3 py-2 text-xs dark:bg-slate-800/70">
+                        <div className="font-bold text-slate-900 dark:text-white">
+                          {selectedCustomer.name}
+                        </div>
+                        <div className="text-[11px] text-slate-600 tabular-nums dark:text-slate-300">
+                          {selectedCustomerDebt > 0
+                            ? `${tr(language, 'Anadaiwa', 'Owes')} ${formatTzs(selectedCustomerDebt)} · ${tr(language, 'ukomo', 'limit')} ${formatTzs(selectedCustomer.creditLimitTzs)}`
+                            : `${tr(language, 'Mkopo Sawa', 'Credit OK')} · ${tr(language, 'ukomo', 'limit')} ${formatTzs(selectedCustomer.creditLimitTzs)}`}
+                        </div>
+                      </div>
+                    )}
+
+                    {lines.length === 0 ? (
+                      <div className="py-2 text-xs text-slate-500 dark:text-slate-400">
+                        {tr(language, 'Hakuna samaki walioongezwa bado.', 'No fish added yet.')}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-xs">
+                        {lines.map((ln) => (
+                          <div key={ln.id} className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+                            <span className="truncate text-slate-700 dark:text-slate-300">
+                              {ln.species} ({renderGradeLabel(ln.grade)}) · {ln.kg.toFixed(1)} kg
+                            </span>
+                            <span className="shrink-0 font-bold tabular-nums text-slate-900 dark:text-white">
+                              {formatTzs(roundTzs(ln.kg * ln.pricePerKgTzs))}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-slate-500 dark:text-slate-400">{tr(language, 'Jumla ndogo', 'Subtotal')}</span>
+                          <span className="font-bold tabular-nums">{formatTzs(subtotalTzs)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <label className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                            <input
+                              type="checkbox"
+                              checked={applyTax}
+                              onChange={(e) => setApplyTax(e.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-[#0B7189]"
+                            />
+                            <span>VAT (18%)</span>
+                          </label>
+                          <span className="font-bold tabular-nums">{formatTzs(taxTzs)}</span>
+                        </div>
+                        {wizardStep === 3 && (
+                          <div className="flex items-center justify-between font-bold text-orange-700 dark:text-orange-300">
+                            <span>{tr(language, 'Baki inayodaiwa', 'Balance owed')}</span>
+                            <span className="tabular-nums">{formatTzs(balanceTzs)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+
+            {/* Compact Sticky POS Bar anchored above mobile bottom nav (h-16) */}
+            <div className="fixed inset-x-0 bottom-16 z-30 border-t border-slate-200/90 bg-white/95 px-3 py-2 shadow-[0_-6px_20px_rgba(8,28,58,0.1)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
+              <div className="flex items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setMobileSummaryOpen((v) => !v)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="truncate">
+                        {lines.length > 0
+                          ? `${lines.length} · ${totalKg.toFixed(1)} kg`
+                          : selectedCustomer?.name || tr(language, 'Chagua mteja', 'Select customer')}
+                      </span>
+                      {mobileSummaryOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#0B7189]" />
+                      ) : (
+                        <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[#0B7189]" />
+                      )}
+                    </div>
+                    <div className="font-display text-base font-extrabold text-[#081C3A] tabular-nums dark:text-amber-300">
+                      {formatTzs(totalTzs)}
+                    </div>
+                  </div>
+                </button>
+
+                {wizardStep === 1 && (
+                  <button
+                    type="button"
+                    disabled={!selectedCustomer}
+                    onClick={() => goToStep(2)}
+                    className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#095580] to-[#0B7E91] px-4 text-xs font-extrabold text-white shadow-sm disabled:opacity-50"
+                  >
+                    <span>{tr(language, 'Inayofuata: Uzito', 'Next: Weight')}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
+                {wizardStep === 2 && (
+                  <button
+                    type="button"
+                    disabled={lines.length === 0}
+                    onClick={() => goToStep(3)}
+                    className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#095580] to-[#0B7E91] px-4 text-xs font-extrabold text-white shadow-sm disabled:opacity-50"
+                  >
+                    <span>{tr(language, 'Inayofuata: Malipo', 'Next: Payment')}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
+                {wizardStep === 3 && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleConfirm}
+                    className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#14A45B] to-[#1EB866] px-4 text-xs font-extrabold text-white shadow-sm disabled:opacity-55"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Printer className="h-3.5 w-3.5" />
+                    )}
+                    <span>{tr(language, 'Thibitisha & Risiti', 'Confirm & Receipt')}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </>
       )}
+
+      {/* Popup Modal for Quick Register New Customer */}
+      <Sheet
+        open={showNewCustomer}
+        onClose={() => setShowNewCustomer(false)}
+        maxWidthClass="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-[#0B7189] dark:text-cyan-400" />
+            <span>{tr(language, 'Sajili Mteja Mpya', 'Register New Customer')}</span>
+          </span>
+        }
+        subtitle={tr(
+          language,
+          'Taarifa zitaunganishwa moja kwa moja kwenye mauzo haya.',
+          'Details will be auto-selected for this sale right away.'
+        )}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAddNewCustomer();
+          }}
+          className="space-y-3.5"
+        >
+          <FormError message={newCustError} shakeKey={newCustShake} />
+          <div>
+            <label
+              htmlFor="qs-new-cust-name"
+              className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
+            >
+              <span>{tr(language, 'Jina la Mteja *', 'Customer Name *')}</span>
+              <ValidCheck valid={newCustName.trim().length > 1} />
+            </label>
+            <input
+              id="qs-new-cust-name"
+              type="text"
+              value={newCustName}
+              onChange={(e) => setNewCustName(e.target.value)}
+              placeholder={tr(
+                language,
+                'mf. Zanzibar Fresh Traders',
+                'e.g. Zanzibar Fresh Traders'
+              )}
+              className={`${INPUT_CLASS} min-h-[44px] text-sm`}
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="qs-new-cust-phone"
+              className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
+            >
+              <span>{tr(language, 'Simu (07... / 255...) *', 'Phone (07... / 255...) *')}</span>
+              <ValidCheck valid={Boolean(normalizeTzPhone(newCustPhone))} />
+            </label>
+            <input
+              id="qs-new-cust-phone"
+              type="tel"
+              inputMode="tel"
+              value={newCustPhone}
+              onChange={(e) => setNewCustPhone(e.target.value)}
+              placeholder="0712 345 678"
+              className={`${INPUT_CLASS} min-h-[44px] font-mono text-sm`}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setShowNewCustomer(false)}
+            >
+              {tr(language, 'Ghairi', 'Cancel')}
+            </Button>
+            <Button type="submit" variant="primary" size="md">
+              {tr(language, 'Hifadhi na Chagua', 'Save & Select')}
+            </Button>
+          </div>
+        </form>
+      </Sheet>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import {
   Crosshair,
   Edit3,
   Loader2,
+  MapPin,
   Maximize2,
   Minimize2,
   QrCode,
@@ -104,6 +105,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
   onSelectPondRef.current = onSelectPond;
   const onSelectFarmRef = useRef(onSelectFarm);
   onSelectFarmRef.current = onSelectFarm;
+  const prevFocusedPondIdRef = useRef<string | null | undefined>(focusedPondId);
 
   const activeFarm = farms.find((f) => f.id === selectedFarmId) || farms[0];
   const center: [number, number] = activeFarm ? activeFarm.gps : [-6.8664, 39.3278];
@@ -227,18 +229,42 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
     }
   }, [selectedFarmId, activeFarm, farms, ponds.length]);
 
-  // Fly to focused pond when selected from table or search
+  // Fly to focused pond when selected, or zoom back to farm/all bounds when cleared
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !focusedPondId) return;
+    const prevFocused = prevFocusedPondIdRef.current;
+    prevFocusedPondIdRef.current = focusedPondId;
+    if (!map) return;
+
+    if (!focusedPondId) {
+      if (prevFocused) {
+        if (selectedFarmId === 'all') {
+          if (farms.length > 1) {
+            map.fitBounds(L.latLngBounds(farms.map((f) => f.gps)), { padding: [36, 36], maxZoom: 7 });
+          }
+        } else if (activeFarm) {
+          const farmPonds = ponds.filter((p) => p.farmId === activeFarm.id && p.polygon?.length >= 3);
+          if (farmPonds.length > 0) {
+            map.fitBounds(L.latLngBounds(farmPonds.flatMap((p) => p.polygon)), {
+              padding: [38, 38],
+              maxZoom: 18,
+            });
+          } else {
+            map.flyTo(activeFarm.gps, 17, { duration: 0.65 });
+          }
+        }
+      }
+      return;
+    }
+
     const target = ponds.find((p) => p.id === focusedPondId);
     if (!target) return;
     if (target.polygon && target.polygon.length >= 3) {
-      map.fitBounds(L.latLngBounds(target.polygon), { padding: [48, 48], maxZoom: 19 });
+      map.fitBounds(L.latLngBounds(target.polygon), { padding: [44, 44], maxZoom: 19 });
     } else {
       map.flyTo(target.gps, 18, { duration: 0.6 });
     }
-  }, [focusedPondId, ponds]);
+  }, [focusedPondId, ponds, selectedFarmId, activeFarm, farms]);
 
   // Render pond polygons, labels, and farm pins
   useEffect(() => {
@@ -304,12 +330,15 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
               ? '#cbd5e1'
               : '#10b981';
 
+      const pondFarm = farms.find((f) => f.id === pond.farmId);
+      const locationLabel = pondFarm?.placeName || pondFarm?.name || pondFarm?.region || '';
       const wq = waterReadings.find((w) => w.pondCode === pond.code);
       const areaLabel = pond.areaSqm ? `${pond.areaSqm.toLocaleString()} m²` : pond.dimensions;
       const perimLabel = pond.perimeterM ? `${pond.perimeterM.toLocaleString()} m` : '—';
 
-      const popupHtml = `<div style="min-width:195px;font-size:12px;line-height:1.45;">
+      const popupHtml = `<div style="min-width:205px;font-size:12px;line-height:1.45;">
         <div style="font-weight:700;margin-bottom:2px;">${pond.code} · ${pond.name}</div>
+        ${locationLabel ? `<div style="color:#0369a1;font-size:11px;margin-bottom:3px;">📍 ${locationLabel}</div>` : ''}
         <div>${tr(language, 'Aina', 'Type')}: <strong>${tDomain(language, pond.unitType)}</strong></div>
         <div>${tr(language, 'Spishi', 'Species')}: <strong>${pond.species}</strong></div>
         <div>${tr(language, 'Idadi ya Samaki', 'Stocking')}: <strong>${pond.currentFish.toLocaleString()}</strong> / ${pond.maxCapacity.toLocaleString()}</div>
@@ -563,52 +592,55 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
         {/* Interactive Overlay Controls matching visual design */}
         {interactiveOverlay ? (
           <>
-            {/* Top-Left: Zoom to Selected Farm */}
-            <div className="pointer-events-auto absolute top-3 left-3 z-[400] flex flex-wrap items-center gap-2">
+            {/* Top Overlay Row: Zoom to Farm + Layer Switcher (wraps cleanly on 375px phones without collision) */}
+            <div className="pointer-events-none absolute inset-x-2.5 top-2.5 z-[400] flex flex-wrap items-center justify-between gap-1.5 sm:inset-x-3 sm:top-3">
               <button
                 type="button"
                 onClick={handleZoomToFarm}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-md backdrop-blur-xs transition-colors hover:bg-white whitespace-nowrap dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
+                className="pointer-events-auto inline-flex max-w-[180px] items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-md backdrop-blur-xs transition-colors hover:bg-white sm:max-w-none sm:px-3 sm:text-xs dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
               >
-                <Search className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                <span>
+                <Search className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+                <span className="truncate">
                   {tr(language, 'Kuza:', 'Zoom to')}{' '}
                   {selectedFarmId === 'all'
                     ? tr(language, 'Mashamba Yote', 'All Farms')
                     : activeFarm?.region || tr(language, 'Shamba', 'Farm')}
                 </span>
               </button>
+
+              {onMapModeChange && (
+                <div className="pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+                  {(
+                    [
+                      { id: 'satellite', label: tr(language, 'Satelaiti', 'Satellite') },
+                      { id: 'street', label: tr(language, 'Mtaa', 'Street') },
+                      { id: 'terrain', label: tr(language, 'Mandhari', 'Terrain') },
+                      { id: 'infrastructure', label: tr(language, 'Miundombinu', 'Assets') },
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => onMapModeChange(mode.id)}
+                      className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors whitespace-nowrap sm:px-2.5 ${
+                        mapMode === mode.id
+                          ? 'bg-[#1D72E8] text-white shadow-xs'
+                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Top-Right: Satellite | Street | Terrain Layer Switcher */}
-            {onMapModeChange && (
-              <div className="pointer-events-auto absolute top-3 right-3 z-[400] flex items-center gap-0.5 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
-                {(
-                  [
-                    { id: 'satellite', label: tr(language, 'Satelaiti', 'Satellite') },
-                    { id: 'street', label: tr(language, 'Mtaa', 'Street') },
-                    { id: 'terrain', label: tr(language, 'Mandhari', 'Terrain') },
-                    { id: 'infrastructure', label: tr(language, 'Miundombinu', 'Assets') },
-                  ] as const
-                ).map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() => onMapModeChange(mode.id)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors whitespace-nowrap ${
-                      mapMode === mode.id
-                        ? 'bg-[#1D72E8] text-white shadow-xs'
-                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
             {/* Left Vertical Floating Stack: + / - / GPS / Fullscreen */}
-            <div className="pointer-events-auto absolute top-14 left-3 z-[400] flex flex-col gap-2">
+            <div
+              className={`pointer-events-auto absolute left-2.5 z-[400] flex flex-col gap-2 sm:left-3 ${
+                onMapModeChange ? 'top-24 sm:top-14' : 'top-14'
+              }`}
+            >
               <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
                 <button
                   type="button"
@@ -669,8 +701,13 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
             </div>
 
             {/* Selected Pond Floating Inspection Card */}
-            {focusedPond && (
-              <div className="pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-sm rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+            {focusedPond && (() => {
+              const focusedFarm = farms.find((f) => f.id === focusedPond.farmId);
+              const focusedLocation =
+                focusedFarm?.placeName || focusedFarm?.name || focusedFarm?.region || '';
+              const focusedWq = waterReadings.find((w) => w.pondCode === focusedPond.code);
+              return (
+              <div className="pointer-events-auto absolute inset-x-2.5 bottom-2.5 z-[400] rounded-2xl border border-slate-200/90 bg-white/95 p-3 shadow-lg backdrop-blur-xs sm:inset-x-auto sm:bottom-3 sm:left-3 sm:max-w-sm dark:border-slate-700 dark:bg-slate-900/95">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -678,6 +715,12 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                       <div className="text-xs font-bold text-slate-900 dark:text-white">
                         {focusedPond.name} ({focusedPond.code}) {tr(language, 'imechaguliwa', 'selected')}
                       </div>
+                      {focusedLocation && (
+                        <div className="mt-0.5 flex items-start gap-1 text-[11px] font-medium text-sky-700 dark:text-sky-300">
+                          <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span>{focusedLocation}</span>
+                        </div>
+                      )}
                       <div className="mt-0.5 font-mono text-[11px] text-slate-600 tabular-nums dark:text-slate-300">
                         {tr(language, 'Eneo:', 'Area:')}{' '}
                         {focusedPond.areaSqm
@@ -690,6 +733,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                         {tDomain(language, focusedPond.unitType)} · {focusedPond.species} ·{' '}
                         {focusedPond.currentFish.toLocaleString()} /{' '}
                         {focusedPond.maxCapacity.toLocaleString()} {tr(language, 'samaki', 'fish')}
+                        {focusedWq ? ` · ${focusedWq.temperature}°C · DO ${focusedWq.dissolvedOxygen} mg/L` : ''}
                       </div>
                     </div>
                   </div>
@@ -705,7 +749,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                   )}
                 </div>
                 {(onEditPondBoundary || onOpenPondProfile) && (
-                  <div className="mt-2.5 flex items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
                     {onEditPondBoundary && (
                       <button
                         type="button"
@@ -713,7 +757,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                           setIsFullscreen(false);
                           onEditPondBoundary(focusedPond);
                         }}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         <Edit3 className="h-3 w-3" /> {tr(language, 'Hariri Mpaka', 'Edit Boundary')}
                       </button>
@@ -722,7 +766,7 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                       <button
                         type="button"
                         onClick={() => onOpenPondProfile(focusedPond)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#0284c7] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0369a1]"
+                        className="inline-flex min-h-[34px] items-center gap-1 rounded-lg bg-[#0284c7] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0369a1]"
                       >
                         <QrCode className="h-3 w-3" /> {tr(language, 'Fungua Profaili ya QR', 'Open QR Profile')}
                       </button>
@@ -730,7 +774,8 @@ export const LeafletFarmMap: React.FC<LeafletFarmMapProps> = ({
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </>
         ) : (
           <div className="pointer-events-auto absolute bottom-2.5 right-2.5 z-[400] flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md dark:border-slate-700 dark:bg-slate-900">

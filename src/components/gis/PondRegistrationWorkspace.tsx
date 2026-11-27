@@ -1200,7 +1200,7 @@ export const PondRegistrationWorkspace: React.FC<PondRegistrationWorkspaceProps>
                     setFarmId(nextId);
                     onFarmChange?.(nextId);
                   }}
-                  className={`${INPUT_CLASS} pl-10 font-semibold`}
+                  className={`${INPUT_CLASS} truncate pl-10 pr-8 font-semibold`}
                 >
                   {state.farms.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -1228,7 +1228,7 @@ export const PondRegistrationWorkspace: React.FC<PondRegistrationWorkspaceProps>
                     key={opt.id}
                     type="button"
                     onClick={() => handleUnitTypeChange(opt.id)}
-                    className={`rounded-xl border px-2 py-2 text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                    className={`min-h-[40px] rounded-xl border px-2 py-2 text-center text-[11px] font-semibold leading-tight transition-colors ${
                       unitType === opt.id
                         ? 'border-[#1D72E8] bg-sky-50 text-[#1D72E8] dark:border-sky-500 dark:bg-sky-950/40 dark:text-sky-300'
                         : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -2207,49 +2207,48 @@ export const PondRegistrationWorkspace: React.FC<PondRegistrationWorkspaceProps>
           className={
             isMapFullscreen
               ? 'fixed inset-3 z-[900] flex flex-col overflow-hidden rounded-2xl border border-slate-300 bg-slate-900 shadow-2xl dark:border-slate-700'
-              : 'relative h-[430px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-rest lg:h-[465px] dark:border-slate-700'
+              : 'relative h-[340px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-rest sm:h-[430px] lg:h-[465px] dark:border-slate-700'
           }
         >
           <div ref={mapContainerRef} className="h-full w-full flex-1" />
 
-          {/* Top-Left: Zoom to Selected Farm */}
-          <div className="pointer-events-auto absolute top-3 left-3 z-[400]">
+          {/* Top Overlay Row: Zoom to Farm + Map Style Switcher (wraps cleanly on mobile) */}
+          <div className="pointer-events-none absolute inset-x-2.5 top-2.5 z-[400] flex flex-wrap items-center justify-between gap-1.5 sm:inset-x-3 sm:top-3">
             <button
               type="button"
               onClick={handleZoomToFarm}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-md backdrop-blur-xs hover:bg-white whitespace-nowrap dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
+              className="pointer-events-auto inline-flex max-w-[165px] items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 shadow-md backdrop-blur-xs hover:bg-white sm:max-w-none sm:px-3 sm:text-xs dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
             >
-              <Search className="h-3.5 w-3.5 text-slate-500" />
-              <span>
+              <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <span className="truncate">
                 {tr(language, 'Kuza:', 'Zoom to')} {selectedFarm?.region || tr(language, 'Shamba', 'Farm')}
               </span>
             </button>
-          </div>
 
-          {/* Top-Right: Satellite | Street | Terrain */}
-          <div className="pointer-events-auto absolute top-3 right-3 z-[400] flex items-center gap-0.5 rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
-            {(['satellite', 'street', 'terrain'] as const).map((style) => (
-              <button
-                key={style}
-                type="button"
-                onClick={() => setMapStyle(style)}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                  mapStyle === style
-                    ? 'bg-[#1D72E8] text-white shadow-xs'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
-                }`}
-              >
-                {style === 'satellite'
-                  ? tr(language, 'Satelaiti', 'Satellite')
-                  : style === 'street'
-                    ? tr(language, 'Mtaa', 'Street')
-                    : tr(language, 'Mandhari', 'Terrain')}
-              </button>
-            ))}
+            <div className="pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+              {(['satellite', 'street', 'terrain'] as const).map((style) => (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => setMapStyle(style)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors whitespace-nowrap sm:px-2.5 ${
+                    mapStyle === style
+                      ? 'bg-[#1D72E8] text-white shadow-xs'
+                      : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {style === 'satellite'
+                    ? tr(language, 'Satelaiti', 'Satellite')
+                    : style === 'street'
+                      ? tr(language, 'Mtaa', 'Street')
+                      : tr(language, 'Mandhari', 'Terrain')}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Left Floating Vertical Controls: + / - / GPS / Fullscreen */}
-          <div className="pointer-events-auto absolute top-14 left-3 z-[400] flex flex-col gap-2">
+          <div className="pointer-events-auto absolute left-2.5 top-24 z-[400] flex flex-col gap-2 sm:left-3 sm:top-14">
             <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
               <button
                 type="button"
@@ -2307,7 +2306,7 @@ export const PondRegistrationWorkspace: React.FC<PondRegistrationWorkspaceProps>
 
           {/* Floating Selected / Active Boundary Inspection Card (matches reference image) */}
           {(measurement?.valid || inspectedNeighborPond) && (
-            <div className="pointer-events-auto absolute bottom-3 left-3 z-[400] max-w-sm rounded-2xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+            <div className="pointer-events-auto absolute inset-x-2.5 bottom-2.5 z-[400] rounded-2xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-lg backdrop-blur-xs sm:inset-x-auto sm:bottom-3 sm:left-3 sm:max-w-sm dark:border-slate-700 dark:bg-slate-900/95">
               {inspectedNeighborPond ? (
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2">

@@ -315,17 +315,88 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
     <Card className="p-3.5">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <List className="h-4 w-4 text-[#1D72E8]" />
+          <List className="h-4 w-4 shrink-0 text-[#1D72E8]" />
           <h3 className="text-xs font-bold text-slate-900 dark:text-white">
             {tr(language, 'Mabwawa, Matanki na Vizimba Vilivyosajiliwa', 'Registered Ponds, Tanks & Cages')}
           </h3>
         </div>
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-          <ShieldCheck className="h-3.5 w-3.5" />{' '}
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />{' '}
           {tr(language, 'Udhibiti wa kuzuia kujaza samaki kupita kiasi umewashwa', 'Over-stocking capacity lock active')}
         </span>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile card list (avoids squeezed/clipped table columns at 375px) */}
+      <div className="space-y-2 md:hidden">
+        {filteredPonds.slice(0, 5).map((pond) => (
+          <div
+            key={pond.id}
+            className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/40"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                    {pond.code}
+                  </span>
+                  <span className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                    ({pond.name})
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  {tDomain(language, pond.unitType)} · {pond.species}
+                </div>
+              </div>
+              <Badge
+                variant={
+                  pond.status === 'Healthy' || pond.status === 'Harvest Ready'
+                    ? 'success'
+                    : pond.status === 'Attention'
+                      ? 'warning'
+                      : 'neutral'
+                }
+              >
+                {tDomain(language, pond.status)}
+              </Badge>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-2 text-[11px] dark:border-slate-700/60">
+              <div className="flex items-center gap-3 tabular-nums">
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {formatNumber(pond.currentFish)}{' '}
+                  <span className="font-normal text-slate-500">{tr(language, 'samaki', 'fish')}</span>
+                </span>
+                <span className="text-slate-600 dark:text-slate-300">
+                  {pond.areaSqm
+                    ? pond.areaSqm >= 1000
+                      ? `${(pond.areaSqm / 10000).toFixed(2)} ha`
+                      : `${pond.areaSqm.toLocaleString()} m²`
+                    : `${pond.waterCapacityM3} m³`}
+                  {pond.perimeterM ? ` · ${pond.perimeterM} m` : ''}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => openEditBoundary(pond)}
+                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                <Edit3 className="h-3 w-3" /> {tr(language, 'Hariri', 'Edit')}
+              </button>
+            </div>
+          </div>
+        ))}
+        {filteredPonds.length === 0 && (
+          <div className="py-4 text-center text-xs text-slate-500">
+            {tr(
+              language,
+              'Hakuna mabwawa, vizimba au matanki yaliyosajiliwa kwa shamba hili bado.',
+              'No ponds, cages, or tanks registered for this farm yet.'
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop preview table */}
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
@@ -412,78 +483,78 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
 
   return (
     <PullToRefresh onRefresh={async () => {}}>
-      <div className="space-y-4">
-        {/* TOP 4 KPI SUMMARY CARDS (matching reference image) */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-rest dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1D72E8] text-white shadow-xs">
-              <Home className="h-5 w-5" />
+      <div className="space-y-3.5 sm:space-y-4">
+        {/* TOP 4 KPI SUMMARY CARDS (matching reference image, tight balanced grid on mobile) */}
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+          <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-rest sm:gap-3.5 sm:px-4 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1D72E8] text-white shadow-xs sm:h-11 sm:w-11">
+              <Home className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="font-display text-xl font-extrabold leading-tight text-slate-900 tabular-nums dark:text-white">
+            <div className="min-w-0">
+              <div className="font-display text-lg font-extrabold leading-tight text-slate-900 tabular-nums sm:text-xl dark:text-white">
                 <CountUpNumber value={totalFarmsCount} />
               </div>
-              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="truncate text-[11px] font-medium text-slate-500 sm:text-xs dark:text-slate-400">
                 {tr(language, 'Jumla ya Mashamba', 'Total Farms')}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-rest dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#059669] text-white shadow-xs">
-              <Waves className="h-5 w-5" />
+          <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-rest sm:gap-3.5 sm:px-4 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#059669] text-white shadow-xs sm:h-11 sm:w-11">
+              <Waves className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="font-display text-xl font-extrabold leading-tight text-slate-900 tabular-nums dark:text-white">
+            <div className="min-w-0">
+              <div className="font-display text-lg font-extrabold leading-tight text-slate-900 tabular-nums sm:text-xl dark:text-white">
                 <CountUpNumber value={totalUnitsCount} />
               </div>
-              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="truncate text-[11px] font-medium text-slate-500 sm:text-xs dark:text-slate-400">
                 {tr(language, 'Mabwawa na Vizimba', 'Total Ponds & Units')}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-rest dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#081C3A] text-white shadow-xs dark:bg-sky-700">
-              <Fish className="h-5 w-5" />
+          <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-rest sm:gap-3.5 sm:px-4 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#081C3A] text-white shadow-xs sm:h-11 sm:w-11 dark:bg-sky-700">
+              <Fish className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="font-display text-xl font-extrabold leading-tight text-slate-900 tabular-nums dark:text-white">
+            <div className="min-w-0">
+              <div className="font-display text-lg font-extrabold leading-tight text-slate-900 tabular-nums sm:text-xl dark:text-white">
                 <CountUpNumber
                   value={totalFishCapacity}
                   formatter={(v) => formatNumber(v)}
                 />
               </div>
-              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="truncate text-[11px] font-medium text-slate-500 sm:text-xs dark:text-slate-400">
                 {tr(language, 'Uwezo wa Samaki', 'Fish Capacity')}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3.5 rounded-2xl border border-slate-200/90 bg-white px-4 py-3 shadow-rest dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#16A34A] text-white shadow-xs">
-              <TrendingUp className="h-5 w-5" />
+          <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-rest sm:gap-3.5 sm:px-4 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#16A34A] text-white shadow-xs sm:h-11 sm:w-11">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="font-display text-xl font-extrabold leading-tight text-slate-900 tabular-nums dark:text-white">
+            <div className="min-w-0">
+              <div className="font-display text-lg font-extrabold leading-tight text-slate-900 tabular-nums sm:text-xl dark:text-white">
                 {operationalPct}%
               </div>
-              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="truncate text-[11px] font-medium text-slate-500 sm:text-xs dark:text-slate-400">
                 {tr(language, 'Inafanya Kazi', 'Operational')}
               </div>
             </div>
           </div>
         </div>
 
-        {/* 4-SECTION NAVIGATION BAR */}
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-rest dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-center gap-1">
+        {/* 4-SECTION NAVIGATION BAR (clean 2x2 grid on mobile, horizontal bar on sm+) */}
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/90 bg-white p-2 shadow-rest sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-1.5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="grid w-full grid-cols-2 gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-1">
             {(
               [
-                { id: 'overview', label: tr(language, 'Muhtasari wa Mashamba', 'Farm Overview'), icon: Building2 },
-                { id: 'map', label: tr(language, 'Ramani ya Shamba', 'Farm Map'), icon: MapPin },
-                { id: 'register-pond', label: tr(language, 'Usajili', 'Registration'), icon: PlusCircle },
-                { id: 'directory', label: tr(language, 'Orodha ya Mabwawa', 'Pond & Cage Directory'), icon: List },
+                { id: 'overview', label: tr(language, 'Muhtasari', 'Overview'), desktopLabel: tr(language, 'Muhtasari wa Mashamba', 'Farm Overview'), icon: Building2 },
+                { id: 'map', label: tr(language, 'Ramani', 'Farm Map'), desktopLabel: tr(language, 'Ramani ya Shamba', 'Farm Map'), icon: MapPin },
+                { id: 'register-pond', label: tr(language, 'Usajili', 'Registration'), desktopLabel: tr(language, 'Usajili', 'Registration'), icon: PlusCircle },
+                { id: 'directory', label: tr(language, 'Orodha Mabwawa', 'Pond Directory'), desktopLabel: tr(language, 'Orodha ya Mabwawa', 'Pond & Cage Directory'), icon: List },
               ] as const
             ).map((tab) => {
               const Icon = tab.icon;
@@ -501,14 +572,15 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
                     }
                     setSection(tab.id);
                   }}
-                  className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
+                  className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11.5px] font-bold transition-colors sm:min-h-0 sm:justify-start sm:px-3.5 sm:text-xs sm:whitespace-nowrap ${
                     isActive
                       ? 'bg-[#081C3A] text-white shadow-xs dark:bg-[#1D72E8]'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:bg-transparent dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white'
                   }`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{tab.label}</span>
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate sm:hidden">{tab.label}</span>
+                  <span className="hidden sm:inline">{tab.desktopLabel}</span>
                 </button>
               );
             })}
@@ -516,12 +588,12 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
 
           {/* Single Farm Filter Selector */}
           {!isRegistrationActive && (
-            <div className="flex items-center gap-2 pr-1">
+            <div className="w-full sm:w-auto sm:pr-1">
               <select
                 value={mapFarmId}
                 onChange={(e) => selectFarm(e.target.value)}
                 aria-label={tr(language, 'Chuja kwa shamba', 'Filter by farm')}
-                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-sky-500 focus:outline-none sm:min-h-0 sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
               >
                 <option value="all">
                   {tr(language, `Mashamba Yote (${state.farms.length})`, `All Farms (${state.farms.length})`)}
@@ -657,16 +729,16 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
         {/* SECTION 2: FARM MAP */}
         {currentSection === 'map' && (
           <Card>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                <div className="relative w-full sm:w-auto">
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchJump(e.target.value)}
                     placeholder={tr(language, 'Tafuta bwawa au shamba...', 'Find pond or farm...')}
-                    className="w-48 rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none sm:min-h-0 sm:w-48 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
                 <span className="text-xs text-slate-500 tabular-nums dark:text-slate-400">
@@ -677,7 +749,7 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setShowMapTools((v) => !v)}
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:min-h-0 ${
                   showMapTools
                     ? 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-950/50 dark:text-sky-200'
                     : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -808,13 +880,13 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
               </div>
             )}
 
-            <Suspense fallback={<MapSkeleton heightClass="h-[520px]" />}>
+            <Suspense fallback={<MapSkeleton heightClass="h-[360px] sm:h-[520px]" />}>
               <LeafletFarmMap
                 ponds={state.ponds}
                 farms={state.farms}
                 selectedFarmId={mapFarmId}
                 mapMode={mapMode}
-                heightClass="h-[520px]"
+                heightClass="h-[360px] sm:h-[520px]"
                 infrastructureMarkers={state.infrastructureMarkers || []}
                 waterReadings={state.waterReadings}
                 visibleLayers={visibleLayers}
@@ -862,21 +934,21 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
           <div className="space-y-3">
             {/* Single unified registration mode selector */}
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+              <div className="grid w-full grid-cols-2 items-stretch gap-1 rounded-xl border border-slate-200 bg-white p-1 sm:inline-flex sm:w-auto sm:items-center dark:border-slate-800 dark:bg-slate-900">
                 <button
                   type="button"
                   onClick={() => {
                     setEditingPond(null);
                     setSection('register-pond');
                   }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                  className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-center text-[11.5px] font-bold leading-tight transition-colors sm:min-h-0 sm:px-3 sm:text-xs ${
                     currentSection === 'register-pond'
                       ? 'bg-[#1D72E8] text-white'
                       : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Waves className="h-3.5 w-3.5" />{' '}
-                  {tr(language, 'Sajili Bwawa / Kizimba / Tanki', 'Register Pond / Cage / Tank')}
+                  <Waves className="h-3.5 w-3.5 shrink-0" />{' '}
+                  <span>{tr(language, 'Sajili Bwawa / Tanki', 'Register Pond / Tank')}</span>
                 </button>
                 <button
                   type="button"
@@ -884,13 +956,14 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
                     setEditingPond(null);
                     setSection('register-farm');
                   }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                  className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-center text-[11.5px] font-bold leading-tight transition-colors sm:min-h-0 sm:px-3 sm:text-xs ${
                     currentSection === 'register-farm'
                       ? 'bg-[#1D72E8] text-white'
                       : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <Building2 className="h-3.5 w-3.5" /> {tr(language, 'Sajili Shamba', 'Register Farm')}
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />{' '}
+                  <span>{tr(language, 'Sajili Shamba', 'Register Farm')}</span>
                 </button>
               </div>
             </div>
@@ -947,33 +1020,174 @@ export const FarmPondsModule: React.FC<FarmPondsModuleProps> = ({
         {/* SECTION 4: POND & CAGE DIRECTORY */}
         {currentSection === 'directory' && (
           <Card>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-3 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <Waves className="h-4 w-4 text-[#1D72E8] dark:text-sky-400" />
+                <Waves className="h-4 w-4 shrink-0 text-[#1D72E8] dark:text-sky-400" />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   {tr(language, 'Mabwawa, Matanki na Vizimba Vilivyosajiliwa', 'Registered Ponds, Tanks & Cages')}
                 </h3>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                <div className="relative w-full sm:w-auto">
+                  <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={tr(language, 'Chuja kwa msimbo, spishi, aina...', 'Filter by code, species, type...')}
-                    className="w-52 rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="min-h-[38px] w-full rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none sm:min-h-0 sm:w-52 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                  <ShieldCheck className="h-4 w-4" />{' '}
+                <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                  <ShieldCheck className="h-4 w-4 shrink-0" />{' '}
                   {tr(language, 'Ulinzi wa uwezo wa kupakia umefungwa', 'Over-stocking capacity lock active')}
                 </span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Card View (clean spacing, no overlapped numbers or clipped Hali/Actions) */}
+            <div className="space-y-2.5 md:hidden">
+              {filteredPonds.map((pond) => {
+                const stockPct = pond.maxCapacity > 0
+                  ? Math.min(100, Math.round((pond.currentFish / pond.maxCapacity) * 100))
+                  : 0;
+                return (
+                  <div
+                    key={pond.id}
+                    className="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          selectFarm(pond.farmId);
+                          setFocusedPondId(pond.id);
+                          setSection('map');
+                        }}
+                        className="min-w-0 text-left"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-white">
+                            {pond.code}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            ({pond.name})
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          {tDomain(language, pond.unitType)} · {tDomain(language, pond.species)}
+                        </div>
+                      </button>
+
+                      <Badge
+                        variant={
+                          pond.status === 'Healthy' || pond.status === 'Harvest Ready'
+                            ? 'success'
+                            : pond.status === 'Attention'
+                              ? 'warning'
+                              : 'neutral'
+                        }
+                      >
+                        {tDomain(language, pond.status)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-2.5 grid grid-cols-2 gap-2.5 rounded-xl border border-slate-200/70 bg-white p-2.5 dark:border-slate-700/70 dark:bg-slate-900/60">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          {tr(language, 'Ujazaji', 'Stocking')}
+                        </div>
+                        <div className="mt-0.5 font-mono text-xs font-bold text-slate-900 tabular-nums dark:text-white">
+                          {formatNumber(pond.currentFish)}{' '}
+                          <span className="font-normal text-slate-400">/ {formatNumber(pond.maxCapacity)}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          <div
+                            className={`h-full rounded-full ${
+                              stockPct >= 90 ? 'bg-amber-500' : 'bg-[#059669]'
+                            }`}
+                            style={{ width: `${stockPct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          {tr(language, 'Eneo & Mzingo', 'Area & Perimeter')}
+                        </div>
+                        <div className="mt-0.5 font-mono text-xs font-bold text-slate-900 tabular-nums dark:text-white">
+                          {pond.areaSqm
+                            ? `${pond.areaSqm.toLocaleString()} m²`
+                            : `${pond.waterCapacityM3} m³`}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500 tabular-nums dark:text-slate-400">
+                          {pond.perimeterM ? `${pond.perimeterM} m` : pond.dimensions}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                      <span className="inline-flex items-center gap-1">
+                        {pond.boundaryVerified && (
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        )}
+                        <span>
+                          {pond.mappingMethod
+                            ? tDomain(language, pond.mappingMethod)
+                            : tr(language, 'Msingi wa Usajili', 'Registry Seed')}
+                        </span>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleAerator(pond.id)}
+                        className={`min-h-[32px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                          pond.aeratorRelayOn
+                            ? 'bg-[#1D72E8] text-white'
+                            : 'border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        }`}
+                      >
+                        {tr(language, 'Kipulizia:', 'Aerator:')}{' '}
+                        {pond.aeratorRelayOn
+                          ? tr(language, 'Imewashwa', 'ON')
+                          : tr(language, 'Tayari', 'Standby')}
+                      </button>
+                    </div>
+
+                    <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-2.5 dark:border-slate-700/60">
+                      <button
+                        type="button"
+                        onClick={() => openEditBoundary(pond)}
+                        className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" /> {tr(language, 'Hariri Ramani', 'Edit Map')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectPondQr(pond)}
+                        className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-sky-800/60 dark:bg-sky-950/60 dark:text-sky-300"
+                      >
+                        <QrCode className="h-3.5 w-3.5" /> {tr(language, 'Profaili', 'Profile')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredPonds.length === 0 && (
+                <div className="py-6 text-center text-xs text-slate-500">
+                  {tr(
+                    language,
+                    'Hakuna mabwawa, vizimba, au matanki yanayolingana.',
+                    'No matching ponds, cages, or tanks found.'
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">

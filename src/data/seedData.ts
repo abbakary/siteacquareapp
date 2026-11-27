@@ -22,7 +22,7 @@ function withGisMetrics(pond: Pond): Pond {
 }
 
 export const ASSET_IMAGES = {
-  banner: '/src/assets/images/banner_tanzania_ponds_1795093727131.jpg',
+  banner: '/src/assets/images/tanzania_aquaculture_banner_1795762876960.jpg',
   tilapia: '/src/assets/images/tilapia_health_splash_1795093727216.jpg',
   avatar: '/src/assets/images/avatar_john_mwakasege_1795093727332.jpg',
   pondThumb: '/src/assets/images/pond_thumbnail_1795093726635.jpg',
@@ -116,6 +116,7 @@ export const INITIAL_STATE: AquacultureState = {
       id: 'farm-dsm',
       name: 'Dar es Salaam — Kigamboni Aquaculture Park',
       region: 'Dar es Salaam',
+      placeName: 'Mbwamaji / Kigamboni Coastal Rd, Wilaya ya Kigamboni, Dar es Salaam',
       gps: [-6.8664, 39.3278],
       operationTypes: ['Hatchery', 'Nursery', 'Grow-out Pond', 'Processing'],
       waterSource: 'Borehole + Filtered Coastal Freshwater Well',
@@ -157,6 +158,7 @@ export const INITIAL_STATE: AquacultureState = {
       id: 'farm-moro',
       name: 'Morogoro — Mvomero Freshwater Unit',
       region: 'Morogoro',
+      placeName: 'Dakawa / Wami Basin Rd, Wilaya ya Mvomero, Morogoro',
       gps: [-6.8278, 37.6591],
       operationTypes: ['Nursery', 'Grow-out Pond', 'Tank Farming'],
       waterSource: 'Wami River Basin Intake',
@@ -177,6 +179,7 @@ export const INITIAL_STATE: AquacultureState = {
       id: 'farm-mwz',
       name: 'Mwanza — Lake Victoria Cage Cluster',
       region: 'Mwanza',
+      placeName: 'Capri Point / Igombe Bay, Wilaya ya Nyamagana, Mwanza',
       gps: [-2.5164, 32.9175],
       operationTypes: ['Cage Farming', 'Distribution'],
       waterSource: 'Lake Victoria Open Water',

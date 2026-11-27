@@ -310,6 +310,7 @@ export interface StockPurchaseRecord {
   id: string;
   date: string;
   itemId?: string;
+  sku?: string;
   itemName: string;
   category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment';
   quantity: number;

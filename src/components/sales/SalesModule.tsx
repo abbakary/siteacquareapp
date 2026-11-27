@@ -422,63 +422,83 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       {/* Header + Mode Switcher */}
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-4 sm:px-5">
-        <div className="flex flex-wrap items-center gap-3">
-          {onBackToMenu && (
-            <Button variant="secondary" size="sm" onClick={onBackToMenu}>
-              <ArrowLeft className="h-4 w-4" /> {t.ui.backToMenu}
+      <Card padded={false} className="space-y-2.5 p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:space-y-0 sm:px-5 sm:py-4">
+        <div className="flex items-center justify-between gap-2 sm:flex-wrap sm:justify-start sm:gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {onBackToMenu && (
+              <Button variant="secondary" size="sm" onClick={onBackToMenu} className="shrink-0 px-2.5 sm:px-3">
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">{t.ui.backToMenu}</span>
+                <span className="sm:hidden">{tr(language, 'Rudi', 'Back')}</span>
+              </Button>
+            )}
+            <div className="min-w-0">
+              <h2 className="truncate font-display text-base font-extrabold text-slate-900 sm:text-lg dark:text-white">
+                <span className="sm:hidden">{tr(language, 'Mauzo POS', 'Sales POS')}</span>
+                <span className="hidden sm:inline">{t.sales.title}</span>
+              </h2>
+              <p className="hidden text-xs text-slate-500 sm:block dark:text-slate-400">{t.sales.subtitle}</p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+            {onOpenFishStock && (
+              <Button variant="secondary" size="sm" onClick={onOpenFishStock} className="px-2.5 text-xs">
+                <Boxes className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                <span>{tr(language, 'Akiba', 'Stock')}</span>
+              </Button>
+            )}
+            <Button variant="warning" size="sm" onClick={() => onQuickAction('harvest')} className="px-2.5 text-xs">
+              <Scale className="h-3.5 w-3.5" />
+              <span>{tr(language, '+ Mavuno', '+ Harvest')}</span>
             </Button>
-          )}
-          <div>
-            <h2 className="font-display text-lg font-extrabold text-slate-900 dark:text-white">
-              {t.sales.title}
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t.sales.subtitle}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <div
             role="tablist"
             aria-label={tr(language, 'Hali ya eneo la mavuno na mauzo', 'Harvest and sales workspace mode')}
-            className="inline-flex rounded-xl border border-slate-200 bg-slate-100/90 p-1 dark:border-slate-700 dark:bg-slate-800"
+            className="grid w-full grid-cols-2 rounded-xl border border-slate-200 bg-slate-100/90 p-1 sm:inline-flex sm:w-auto dark:border-slate-700 dark:bg-slate-800"
           >
             <button
               type="button"
               role="tab"
               aria-selected={workspaceMode === 'wizard'}
               onClick={() => setWorkspaceMode('wizard')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+              className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap sm:px-3.5 ${
                 workspaceMode === 'wizard'
                   ? 'bg-[#0B7189] text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
               }`}
             >
-              <ShoppingCart className="h-3.5 w-3.5" />
-              <span>{tr(language, 'Mchawi wa Mauzo Mapya', 'New Sale Wizard')}</span>
+              <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">{tr(language, 'Mauzo Mapya', 'New Sale')}</span>
+              <span className="hidden sm:inline">{tr(language, 'Mchawi wa Mauzo Mapya', 'New Sale Wizard')}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={workspaceMode === 'operations'}
               onClick={() => setWorkspaceMode('operations')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+              className={`inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all whitespace-nowrap sm:px-3.5 ${
                 workspaceMode === 'operations'
                   ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-900 dark:text-white'
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
               }`}
             >
-              <FileText className="h-3.5 w-3.5" />
-              <span>
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">{tr(language, `Rekodi (${state.sales.length})`, `Records (${state.sales.length})`)}</span>
+              <span className="hidden sm:inline">
                 {tr(language, `Mauzo na Rekodi (${state.sales.length})`, `Sales & Records (${state.sales.length})`)}
               </span>
             </button>
           </div>
 
           {onOpenFishStock && (
-            <Button variant="secondary" size="sm" onClick={onOpenFishStock}>
+            <Button variant="secondary" size="sm" onClick={onOpenFishStock} className="hidden sm:inline-flex">
               <Boxes className="h-4 w-4 text-teal-600 dark:text-teal-400" /> {t.nav.fishStock}
             </Button>
           )}
@@ -537,7 +557,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             </Button>
           )}
 
-          <Button variant="warning" size="sm" onClick={() => onQuickAction('harvest')}>
+          <Button variant="warning" size="sm" onClick={() => onQuickAction('harvest')} className="hidden sm:inline-flex">
             <Scale className="h-4 w-4" /> {t.sales.recordHarvestBtn}
           </Button>
         </div>
@@ -921,164 +941,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
                 )}
               </p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => setShowCustForm(!showCustForm)}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setCustError('');
+                setShowCustForm(true);
+              }}
+            >
               <Plus className="h-4 w-4" /> {t.sales.newCustomer}
             </Button>
           </Card>
-
-          {showCustForm && (
-            <Card className="space-y-3 border-blue-200 dark:border-sky-800/60">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                {tr(language, 'Sajili Mteja Mpya', 'Register New Customer')}
-              </h4>
-              <FormError message={custError} />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div>
-                  <label
-                    htmlFor="cust-name"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Jina *', 'Name *')}
-                  </label>
-                  <input
-                    id="cust-name"
-                    type="text"
-                    value={custName}
-                    onChange={(e) => setCustName(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[42px]`}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="cust-phone"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Simu (255XXXXXXXXX au 07...) *', 'Phone (255XXXXXXXXX or 07...) *')}
-                  </label>
-                  <input
-                    id="cust-phone"
-                    type="tel"
-                    inputMode="tel"
-                    value={custPhone}
-                    onChange={(e) => setCustPhone(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[42px] font-mono`}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="cust-type"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Aina ya Mteja', 'Customer Type')}
-                  </label>
-                  <select
-                    id="cust-type"
-                    value={custType}
-                    onChange={(e) => setCustType(e.target.value as CustomerType)}
-                    className={`${INPUT_CLASS} min-h-[42px]`}
-                  >
-                    <option value="Market">{tDomain(language, 'Market')}</option>
-                    <option value="Hotel/Restaurant">{tDomain(language, 'Hotel/Restaurant')}</option>
-                    <option value="Retailer">{tDomain(language, 'Retailer')}</option>
-                    <option value="Wholesaler">{tDomain(language, 'Wholesaler')}</option>
-                    <option value="Individual">{tDomain(language, 'Individual')}</option>
-                  </select>
-                </div>
-                <div>
-                  <label
-                    htmlFor="cust-loc"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Mahali / Eneo la Uwasilishaji', 'Location / Delivery Area')}
-                  </label>
-                  <input
-                    id="cust-loc"
-                    type="text"
-                    value={custLocation}
-                    onChange={(e) => setCustLocation(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[42px]`}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="cust-tier"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Daraja la Bei', 'Price Tier')}
-                  </label>
-                  <select
-                    id="cust-tier"
-                    value={custTier}
-                    onChange={(e) => setCustTier(e.target.value as PriceTier)}
-                    className={`${INPUT_CLASS} min-h-[42px]`}
-                  >
-                    {TIERS.map((tier) => (
-                      <option key={tier} value={tier}>
-                        {tDomain(language, tier)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label
-                      htmlFor="cust-limit"
-                      className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                    >
-                      {tr(language, 'Kikomo cha Mkopo (TZS)', 'Credit Limit (TZS)')}
-                    </label>
-                    <input
-                      id="cust-limit"
-                      type="number"
-                      inputMode="numeric"
-                      value={custLimit}
-                      onChange={(e) => setCustLimit(e.target.value)}
-                      className={`${INPUT_CLASS} min-h-[42px] tabular-nums`}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="cust-terms"
-                      className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                    >
-                      {tr(language, 'Muda (Siku)', 'Terms (Days)')}
-                    </label>
-                    <input
-                      id="cust-terms"
-                      type="number"
-                      inputMode="numeric"
-                      value={custTerms}
-                      onChange={(e) => setCustTerms(e.target.value)}
-                      className={`${INPUT_CLASS} min-h-[42px] tabular-nums`}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="cust-notes"
-                  className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                >
-                  {tr(language, 'Maelezo', 'Notes')}
-                </label>
-                <input
-                  id="cust-notes"
-                  type="text"
-                  value={custNotes}
-                  onChange={(e) => setCustNotes(e.target.value)}
-                  className={`${INPUT_CLASS} min-h-[42px]`}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setShowCustForm(false)}>
-                  {tr(language, 'Ghairi', 'Cancel')}
-                </Button>
-                <Button variant="success" size="sm" onClick={handleCreateCustomerSubmit}>
-                  {tr(language, 'Hifadhi Mteja', 'Save Customer')}
-                </Button>
-              </div>
-            </Card>
-          )}
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {state.customers.map((c, idx) => {
@@ -1898,6 +1771,166 @@ export const SalesModule: React.FC<SalesModuleProps> = ({
             </Button>
           </div>
         )}
+      </Sheet>
+
+      {/* Register New Customer Modal */}
+      <Sheet
+        open={showCustForm}
+        onClose={() => setShowCustForm(false)}
+        maxWidthClass="sm:max-w-xl"
+        title={tr(language, 'Sajili Mteja Mpya', 'Register New Customer')}
+        subtitle={tr(
+          language,
+          'Weka daraja la bei, eneo na kikomo cha mkopo cha mteja.',
+          'Set buyer price tier, delivery location, and credit limit.'
+        )}
+      >
+        <div className="space-y-3">
+          <FormError message={custError} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="cust-name"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Jina *', 'Name *')}
+              </label>
+              <input
+                id="cust-name"
+                type="text"
+                value={custName}
+                onChange={(e) => setCustName(e.target.value)}
+                className={`${INPUT_CLASS} min-h-[42px]`}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cust-phone"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Simu (255XXXXXXXXX au 07...) *', 'Phone (255XXXXXXXXX or 07...) *')}
+              </label>
+              <input
+                id="cust-phone"
+                type="tel"
+                inputMode="tel"
+                value={custPhone}
+                onChange={(e) => setCustPhone(e.target.value)}
+                className={`${INPUT_CLASS} min-h-[42px] font-mono`}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cust-type"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Aina ya Mteja', 'Customer Type')}
+              </label>
+              <select
+                id="cust-type"
+                value={custType}
+                onChange={(e) => setCustType(e.target.value as CustomerType)}
+                className={`${INPUT_CLASS} min-h-[42px]`}
+              >
+                <option value="Market">{tDomain(language, 'Market')}</option>
+                <option value="Hotel/Restaurant">{tDomain(language, 'Hotel/Restaurant')}</option>
+                <option value="Retailer">{tDomain(language, 'Retailer')}</option>
+                <option value="Wholesaler">{tDomain(language, 'Wholesaler')}</option>
+                <option value="Individual">{tDomain(language, 'Individual')}</option>
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="cust-tier"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Daraja la Bei', 'Price Tier')}
+              </label>
+              <select
+                id="cust-tier"
+                value={custTier}
+                onChange={(e) => setCustTier(e.target.value as PriceTier)}
+                className={`${INPUT_CLASS} min-h-[42px]`}
+              >
+                {TIERS.map((tier) => (
+                  <option key={tier} value={tier}>
+                    {tDomain(language, tier)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="cust-loc"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Mahali / Eneo la Uwasilishaji', 'Location / Delivery Area')}
+              </label>
+              <input
+                id="cust-loc"
+                type="text"
+                value={custLocation}
+                onChange={(e) => setCustLocation(e.target.value)}
+                className={`${INPUT_CLASS} min-h-[42px]`}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cust-limit"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Kikomo cha Mkopo (TZS)', 'Credit Limit (TZS)')}
+              </label>
+              <input
+                id="cust-limit"
+                type="number"
+                inputMode="numeric"
+                value={custLimit}
+                onChange={(e) => setCustLimit(e.target.value)}
+                className={`${INPUT_CLASS} min-h-[42px] tabular-nums`}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cust-terms"
+                className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                {tr(language, 'Muda (Siku)', 'Terms (Days)')}
+              </label>
+              <input
+                id="cust-terms"
+                type="number"
+                inputMode="numeric"
+                value={custTerms}
+                onChange={(e) => setCustTerms(e.target.value)}
+                className={`${INPUT_CLASS} min-h-[42px] tabular-nums`}
+              />
+            </div>
+          </div>
+          <div>
+            <label
+              htmlFor="cust-notes"
+              className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+            >
+              {tr(language, 'Maelezo', 'Notes')}
+            </label>
+            <input
+              id="cust-notes"
+              type="text"
+              value={custNotes}
+              onChange={(e) => setCustNotes(e.target.value)}
+              className={`${INPUT_CLASS} min-h-[42px]`}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 pt-2">
+            <Button variant="secondary" size="md" onClick={() => setShowCustForm(false)}>
+              {tr(language, 'Ghairi', 'Cancel')}
+            </Button>
+            <Button variant="success" size="md" onClick={handleCreateCustomerSubmit}>
+              {tr(language, 'Hifadhi Mteja', 'Save Customer')}
+            </Button>
+          </div>
+        </div>
       </Sheet>
     </div>
   );

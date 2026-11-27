@@ -395,8 +395,8 @@ export const InventoryModule: React.FC<{
       </div>
 
       {activeTab === 'purchases' ? (
-        <Card className="overflow-x-auto">
-          <div className="mb-3 flex items-center justify-between">
+        <Card>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
               {tr(language, 'Daftari la Ripoti za Manunuzi', 'Stock Purchase Report Ledger')} (
               {periodOptions.find((p) => p.id === period)?.label})
@@ -416,60 +416,27 @@ export const InventoryModule: React.FC<{
               )}
             />
           ) : (
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                  <th className="py-2">{tr(language, 'Tarehe', 'Date')}</th>
-                  <th className="py-2">{tr(language, 'Bidhaa', 'Item')}</th>
-                  <th className="py-2">{tr(language, 'Kundi', 'Category')}</th>
-                  <th className="py-2">{tr(language, 'Muuzaji', 'Supplier')}</th>
-                  <th className="py-2">{tr(language, 'Ankara / Lot #', 'Invoice / Lot #')}</th>
-                  <th className="py-2 text-right">{tr(language, 'Kiasi', 'Qty')}</th>
-                  <th className="py-2 text-right">{tr(language, 'Bei ya Kizio', 'Unit Cost')}</th>
-                  <th className="py-2 text-right">{tr(language, 'Jumla', 'Total Cost')}</th>
-                  <th className="py-2 pl-3">{tr(language, 'Malipo / Deni', 'Payment / Due')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <>
+              {/* Mobile Cards */}
+              <div className="space-y-2.5 md:hidden">
                 {filteredPurchases.map((p) => {
                   const paidAmt = p.paidAmountTzs ?? (p.paymentStatus === 'Paid' ? p.totalCostTzs : 0);
                   const dueAmt = Math.max(0, p.totalCostTzs - paidAmt);
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="py-2.5 text-slate-500 tabular-nums dark:text-slate-400">{p.date}</td>
-                      <td className="py-2.5 font-bold text-slate-900 dark:text-white">
-                        <div>{p.itemName}</div>
-                        {p.expiryDate && (
-                          <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                            {tr(language, 'Mwisho:', 'Exp:')} {p.expiryDate}
+                    <div
+                      key={p.id}
+                      className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate font-bold text-slate-900 dark:text-white">
+                            {p.itemName}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-2.5 text-slate-600 dark:text-slate-300">
-                        {tDomain(language, p.category)}
-                      </td>
-                      <td className="py-2.5 text-slate-700 dark:text-slate-300">
-                        <div>{p.supplier}</div>
-                        {p.supplierPhone && (
-                          <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
-                            {p.supplierPhone}
+                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            {tDomain(language, p.category)} · {p.date}
+                            {p.sku ? ` · ${p.sku}` : ''}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                        <div>{p.lotNumber}</div>
-                        {p.invoiceNo && <div className="text-[10px] text-slate-400">{p.invoiceNo}</div>}
-                      </td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums dark:text-slate-200">
-                        {formatNumber(p.quantity)} {p.unit}
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums dark:text-slate-300">
-                        {formatTzs(p.unitCostTzs)}
-                      </td>
-                      <td className="py-2.5 text-right font-extrabold text-slate-900 tabular-nums dark:text-white">
-                        {formatTzs(p.totalCostTzs)}
-                      </td>
-                      <td className="py-2.5 pl-3">
+                        </div>
                         <Badge
                           variant={
                             p.paymentStatus === 'Paid'
@@ -481,89 +448,253 @@ export const InventoryModule: React.FC<{
                         >
                           {tDomain(language, p.paymentStatus)}
                         </Badge>
-                        {dueAmt > 0 && (
-                          <div className="mt-0.5 text-[10px] font-semibold text-rose-700 tabular-nums dark:text-rose-400">
-                            {tr(language, 'Deni:', 'Due:')} {formatTzs(dueAmt)}
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-2 dark:border-slate-700/70">
+                        <div>
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                            {tr(language, 'Kiasi & Bei', 'Qty & Unit Price')}
                           </div>
-                        )}
-                      </td>
-                    </tr>
+                          <div className="font-semibold text-slate-800 tabular-nums dark:text-slate-200">
+                            {formatNumber(p.quantity)} {p.unit} × {formatTzs(p.unitCostTzs)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                            {tr(language, 'Jumla', 'Total')}
+                          </div>
+                          <div className="font-extrabold text-slate-900 tabular-nums dark:text-white">
+                            {formatTzs(p.totalCostTzs)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="truncate">{p.supplier}</span>
+                        <span className="shrink-0 font-mono">
+                          {p.lotNumber}
+                          {dueAmt > 0 ? ` · ${tr(language, 'Deni:', 'Due:')} ${formatTzs(dueAmt)}` : ''}
+                        </span>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                      <th className="py-2">{tr(language, 'Tarehe', 'Date')}</th>
+                      <th className="py-2">{tr(language, 'Bidhaa & SKU', 'Item & SKU')}</th>
+                      <th className="py-2">{tr(language, 'Kundi', 'Category')}</th>
+                      <th className="py-2">{tr(language, 'Muuzaji', 'Supplier')}</th>
+                      <th className="py-2">{tr(language, 'Ankara / Lot #', 'Invoice / Lot #')}</th>
+                      <th className="py-2 text-right">{tr(language, 'Kiasi', 'Qty')}</th>
+                      <th className="py-2 text-right">{tr(language, 'Bei ya Kizio', 'Unit Cost')}</th>
+                      <th className="py-2 text-right">{tr(language, 'Jumla', 'Total Cost')}</th>
+                      <th className="py-2 pl-3">{tr(language, 'Malipo / Deni', 'Payment / Due')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredPurchases.map((p) => {
+                      const paidAmt = p.paidAmountTzs ?? (p.paymentStatus === 'Paid' ? p.totalCostTzs : 0);
+                      const dueAmt = Math.max(0, p.totalCostTzs - paidAmt);
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="py-2.5 text-slate-500 tabular-nums dark:text-slate-400">{p.date}</td>
+                          <td className="py-2.5 font-bold text-slate-900 dark:text-white">
+                            <div>{p.itemName}</div>
+                            {p.sku && (
+                              <div className="font-mono text-[10px] font-normal text-[#1D72E8] dark:text-sky-400">
+                                {p.sku}
+                              </div>
+                            )}
+                            {p.expiryDate && (
+                              <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                                {tr(language, 'Mwisho:', 'Exp:')} {p.expiryDate}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-slate-600 dark:text-slate-300">
+                            {tDomain(language, p.category)}
+                          </td>
+                          <td className="py-2.5 text-slate-700 dark:text-slate-300">
+                            <div>{p.supplier}</div>
+                            {p.supplierPhone && (
+                              <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                                {p.supplierPhone}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                            <div>{p.lotNumber}</div>
+                            {p.invoiceNo && <div className="text-[10px] text-slate-400">{p.invoiceNo}</div>}
+                          </td>
+                          <td className="py-2.5 text-right font-semibold tabular-nums dark:text-slate-200">
+                            {formatNumber(p.quantity)} {p.unit}
+                          </td>
+                          <td className="py-2.5 text-right tabular-nums dark:text-slate-300">
+                            {formatTzs(p.unitCostTzs)}
+                          </td>
+                          <td className="py-2.5 text-right font-extrabold text-slate-900 tabular-nums dark:text-white">
+                            {formatTzs(p.totalCostTzs)}
+                          </td>
+                          <td className="py-2.5 pl-3">
+                            <Badge
+                              variant={
+                                p.paymentStatus === 'Paid'
+                                  ? 'success'
+                                  : p.paymentStatus === 'Partial'
+                                    ? 'warning'
+                                    : 'danger'
+                              }
+                            >
+                              {tDomain(language, p.paymentStatus)}
+                            </Badge>
+                            {dueAmt > 0 && (
+                              <div className="mt-0.5 text-[10px] font-semibold text-rose-700 tabular-nums dark:text-rose-400">
+                                {tr(language, 'Deni:', 'Due:')} {formatTzs(dueAmt)}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </Card>
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                <th className="py-2">{tr(language, 'Bidhaa & SKU', 'Item & SKU')}</th>
-                <th className="py-2">{tr(language, 'Kundi', 'Category')}</th>
-                <th className="py-2">{tr(language, 'Kifurushi / Lot', 'Lot / Batch')}</th>
-                <th className="py-2">{tr(language, 'Muuzaji', 'Supplier')}</th>
-                <th className="py-2 text-right">{tr(language, 'Akiba / Kiwango', 'Stock / Reorder')}</th>
-                <th className="py-2 text-right">{tr(language, 'Bei ya Kizio', 'Unit Cost')}</th>
-                <th className="py-2 text-right">{tr(language, 'Thamani ya Akiba', 'Stock Value')}</th>
-                <th className="py-2 pl-3">{tr(language, 'Mwisho wa Matumizi', 'Expiry')}</th>
-                <th className="py-2">{tr(language, 'Hali', 'Status')}</th>
-                <th className="py-2 text-right">{tr(language, 'Kitendo', 'Action')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredInventory.map((i) => (
-                <tr key={i.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="py-2.5 font-bold text-slate-900 dark:text-white">
-                    <div>{i.name}</div>
-                    {i.sku && (
-                      <div className="font-mono text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                        {i.sku}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-2.5 text-slate-600 dark:text-slate-300">
-                    {tDomain(language, i.category)}
-                  </td>
-                  <td className="py-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                    {i.batchOrLot}
-                  </td>
-                  <td className="py-2.5 text-slate-700 dark:text-slate-300">{i.supplier}</td>
-                  <td className="py-2.5 text-right tabular-nums dark:text-slate-200">
-                    <div className="font-bold">
-                      {formatNumber(i.stock)} {i.unit}
+        <Card>
+          {/* Mobile Cards for Current Stock Balance */}
+          <div className="space-y-2.5 md:hidden">
+            {filteredInventory.map((i) => (
+              <div
+                key={i.id}
+                className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-bold text-slate-900 dark:text-white">{i.name}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      {tDomain(language, i.category)}
+                      {i.sku ? ` · ${i.sku}` : ''} · {i.batchOrLot}
                     </div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                      {tr(language, 'Kiwango:', 'Min:')} {formatNumber(i.reorderLevel)}
+                  </div>
+                  <Badge variant={i.status === 'In Stock' ? 'success' : 'warning'}>
+                    {tDomain(language, i.status)}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-2 dark:border-slate-700/70">
+                  <div>
+                    <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Akiba / Kiwango', 'Stock / Min')}
                     </div>
-                  </td>
-                  <td className="py-2.5 text-right tabular-nums dark:text-slate-300">
-                    {formatTzs(i.unitCostTzs)}
-                  </td>
-                  <td className="py-2.5 text-right font-bold text-slate-900 tabular-nums dark:text-white">
-                    {formatTzs(i.stock * i.unitCostTzs)}
-                  </td>
-                  <td className="py-2.5 pl-3 text-slate-500 dark:text-slate-400">
-                    {i.expiryDate || '—'}
-                  </td>
-                  <td className="py-2.5">
-                    <Badge variant={i.status === 'In Stock' ? 'success' : 'warning'}>
-                      {tDomain(language, i.status)}
-                    </Badge>
-                  </td>
-                  <td className="py-2.5 text-right">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => (onRestockItem ? onRestockItem(i.id) : onQuickAction('inventory'))}
-                    >
-                      {tr(language, '+ Ongeza Akiba', '+ Restock')}
-                    </Button>
-                  </td>
+                    <div className="font-bold text-slate-900 tabular-nums dark:text-white">
+                      {formatNumber(i.stock)} {i.unit}{' '}
+                      <span className="font-normal text-slate-500">
+                        ({tr(language, 'Chini:', 'Min:')} {formatNumber(i.reorderLevel)})
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Thamani', 'Stock Value')}
+                    </div>
+                    <div className="font-bold text-slate-900 tabular-nums dark:text-white">
+                      {formatTzs(i.stock * i.unitCostTzs)}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                    {i.supplier} · {formatTzs(i.unitCostTzs)}/{i.unit}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => (onRestockItem ? onRestockItem(i.id) : onQuickAction('inventory'))}
+                  >
+                    {tr(language, '+ Ongeza Akiba', '+ Restock')}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-[11px] font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <th className="py-2">{tr(language, 'Bidhaa & SKU', 'Item & SKU')}</th>
+                  <th className="py-2">{tr(language, 'Kundi', 'Category')}</th>
+                  <th className="py-2">{tr(language, 'Kifurushi / Lot', 'Lot / Batch')}</th>
+                  <th className="py-2">{tr(language, 'Muuzaji', 'Supplier')}</th>
+                  <th className="py-2 text-right">{tr(language, 'Akiba / Kiwango', 'Stock / Reorder')}</th>
+                  <th className="py-2 text-right">{tr(language, 'Bei ya Kizio', 'Unit Cost')}</th>
+                  <th className="py-2 text-right">{tr(language, 'Thamani ya Akiba', 'Stock Value')}</th>
+                  <th className="py-2 pl-3">{tr(language, 'Mwisho wa Matumizi', 'Expiry')}</th>
+                  <th className="py-2">{tr(language, 'Hali', 'Status')}</th>
+                  <th className="py-2 text-right">{tr(language, 'Kitendo', 'Action')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredInventory.map((i) => (
+                  <tr key={i.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="py-2.5 font-bold text-slate-900 dark:text-white">
+                      <div>{i.name}</div>
+                      {i.sku && (
+                        <div className="font-mono text-[10px] font-normal text-[#1D72E8] dark:text-sky-400">
+                          {i.sku}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-slate-600 dark:text-slate-300">
+                      {tDomain(language, i.category)}
+                    </td>
+                    <td className="py-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                      {i.batchOrLot}
+                    </td>
+                    <td className="py-2.5 text-slate-700 dark:text-slate-300">{i.supplier}</td>
+                    <td className="py-2.5 text-right tabular-nums dark:text-slate-200">
+                      <div className="font-bold">
+                        {formatNumber(i.stock)} {i.unit}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {tr(language, 'Kiwango:', 'Min:')} {formatNumber(i.reorderLevel)}
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums dark:text-slate-300">
+                      {formatTzs(i.unitCostTzs)}
+                    </td>
+                    <td className="py-2.5 text-right font-bold text-slate-900 tabular-nums dark:text-white">
+                      {formatTzs(i.stock * i.unitCostTzs)}
+                    </td>
+                    <td className="py-2.5 pl-3 text-slate-500 dark:text-slate-400">
+                      {i.expiryDate || '—'}
+                    </td>
+                    <td className="py-2.5">
+                      <Badge variant={i.status === 'In Stock' ? 'success' : 'warning'}>
+                        {tDomain(language, i.status)}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => (onRestockItem ? onRestockItem(i.id) : onQuickAction('inventory'))}
+                      >
+                        {tr(language, '+ Ongeza Akiba', '+ Restock')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>

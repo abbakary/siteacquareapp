@@ -9,12 +9,147 @@ import {
   Mic,
   ShieldCheck,
   QrCode,
+  CheckCircle2,
+  Plus,
+  MapPin,
+  Navigation,
 } from 'lucide-react';
 import { AquacultureState, Pond } from '../types/aquaculture';
 import { exportToCsv, formatTzs, todayIso } from '../utils/formatters';
 import { getPermissions } from '../utils/rbac';
 import { tDomain, tr } from '../i18n/translations';
 import { Button, FormError, INPUT_CLASS, Sheet, ValidCheck, useLanguage, usePreferences } from '../ui';
+
+const KNOWN_INVENTORY_UNITS = new Set([
+  'kg',
+  'g',
+  'tonnes',
+  'bags',
+  'litres',
+  'ml',
+  'bottles',
+  'jerrycans',
+  'drums',
+  'pcs',
+  'packs',
+  'boxes',
+  'cartons',
+  'tablets',
+  'sachets',
+  'vials',
+  'tubes',
+  'sets',
+  'rolls',
+  'meters',
+  'fish',
+]);
+
+function normalizeInventoryUnit(raw?: string): { selectValue: string; customUnit: string } {
+  const clean = (raw || '').trim();
+  const lower = clean.toLowerCase();
+  if (!lower) return { selectValue: 'kg', customUnit: '' };
+  const aliasMap: Record<string, string> = {
+    kg: 'kg',
+    kgs: 'kg',
+    kilogram: 'kg',
+    kilograms: 'kg',
+    g: 'g',
+    gm: 'g',
+    gram: 'g',
+    grams: 'g',
+    ton: 'tonnes',
+    tons: 'tonnes',
+    tonne: 'tonnes',
+    tonnes: 'tonnes',
+    bag: 'bags',
+    bags: 'bags',
+    sack: 'bags',
+    sacks: 'bags',
+    l: 'litres',
+    ltr: 'litres',
+    ltrs: 'litres',
+    liter: 'litres',
+    liters: 'litres',
+    litre: 'litres',
+    litres: 'litres',
+    ml: 'ml',
+    millilitre: 'ml',
+    millilitres: 'ml',
+    bottle: 'bottles',
+    bottles: 'bottles',
+    chupa: 'bottles',
+    jerrycan: 'jerrycans',
+    jerrycans: 'jerrycans',
+    can: 'jerrycans',
+    cans: 'jerrycans',
+    dumu: 'jerrycans',
+    drum: 'drums',
+    drums: 'drums',
+    pc: 'pcs',
+    pcs: 'pcs',
+    piece: 'pcs',
+    pieces: 'pcs',
+    unit: 'pcs',
+    units: 'pcs',
+    pack: 'packs',
+    packs: 'packs',
+    packet: 'packs',
+    packets: 'packs',
+    box: 'boxes',
+    boxes: 'boxes',
+    carton: 'cartons',
+    cartons: 'cartons',
+    tablet: 'tablets',
+    tablets: 'tablets',
+    tab: 'tablets',
+    tabs: 'tablets',
+    sachet: 'sachets',
+    sachets: 'sachets',
+    vial: 'vials',
+    vials: 'vials',
+    tube: 'tubes',
+    tubes: 'tubes',
+    set: 'sets',
+    sets: 'sets',
+    roll: 'rolls',
+    rolls: 'rolls',
+    m: 'meters',
+    meter: 'meters',
+    meters: 'meters',
+    metre: 'meters',
+    metres: 'meters',
+    fish: 'fish',
+    fingerling: 'fish',
+    fingerlings: 'fish',
+    fry: 'fish',
+  };
+  const mapped = aliasMap[lower];
+  if (mapped && KNOWN_INVENTORY_UNITS.has(mapped)) {
+    return { selectValue: mapped, customUnit: '' };
+  }
+  return { selectValue: 'other', customUnit: clean };
+}
+
+function generateAutoSku(
+  category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment',
+  name: string,
+  seqSeed: number
+): string {
+  const prefixMap = {
+    Feed: 'FD',
+    Fingerlings: 'FG',
+    Medicine: 'MD',
+    Fuel: 'FL',
+    Equipment: 'EQ',
+  } as const;
+  const slug =
+    name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 3) || 'ITM';
+  const num = String(101 + Math.max(0, seqSeed)).padStart(3, '0');
+  return `${prefixMap[category]}-${slug}-${num}`;
+}
 
 export type QuickActionType =
   | 'feeding'
@@ -61,7 +196,15 @@ interface QuickActionModalsProps {
     actualFedKg: number;
     pin: string;
   }) => { ok: boolean; error?: string };
-  onAddInventory: (payload: AddInventoryPayload) => void;
+  onAddInventory: (payload: AddInventoryPayload) => {
+    sku: string;
+    lotNumber: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    totalCostTzs: number;
+    isNew: boolean;
+  } | void;
   onRecordWater: (payload: {
     pondCode: string;
     ph: number;
@@ -135,11 +278,11 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
   // Inventory & Stock Purchase state
   const [invMode, setInvMode] = useState<'existing' | 'new'>('existing');
   const [invExistingId, setInvExistingId] = useState<string>('');
-  const [invSku, setInvSku] = useState<string>('');
   const [invName, setInvName] = useState<string>('');
   const [invCategory, setInvCategory] = useState<'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment'>('Feed');
   const [invQty, setInvQty] = useState<string>('');
-  const [invUnit, setInvUnit] = useState<string>('kg');
+  const [invUnitSelect, setInvUnitSelect] = useState<string>('kg');
+  const [invCustomUnit, setInvCustomUnit] = useState<string>('');
   const [invCost, setInvCost] = useState<string>('');
   const [invReorderLevel, setInvReorderLevel] = useState<string>('50');
   const [invLotNumber, setInvLotNumber] = useState<string>('');
@@ -151,15 +294,28 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
   const [invPaymentStatus, setInvPaymentStatus] = useState<'Paid' | 'Partial' | 'Credit Debt'>('Paid');
   const [invPaidAmount, setInvPaidAmount] = useState<string>('');
   const [invNotes, setInvNotes] = useState<string>('');
+  const [createdPurchaseReceipt, setCreatedPurchaseReceipt] = useState<{
+    sku: string;
+    lotNumber: string;
+    itemName: string;
+    category: 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment';
+    quantity: number;
+    unit: string;
+    totalCostTzs: number;
+    isNew: boolean;
+  } | null>(null);
+
+  const effectiveInvUnit = invUnitSelect === 'other' ? invCustomUnit.trim() || 'pcs' : invUnitSelect;
 
   const applyExistingItemSelection = (itemId: string) => {
     setInvExistingId(itemId);
     const found = state.inventory.find((i) => i.id === itemId);
     if (found) {
+      const normalized = normalizeInventoryUnit(found.unit);
       setInvName(found.name);
-      setInvSku(found.sku || '');
       setInvCategory(found.category);
-      setInvUnit(found.unit);
+      setInvUnitSelect(normalized.selectValue);
+      setInvCustomUnit(normalized.customUnit);
       setInvCost(String(found.unitCostTzs));
       setInvReorderLevel(String(found.reorderLevel));
       setInvSupplier(found.supplier);
@@ -204,6 +360,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
   // Initialize contextual defaults whenever modal opens
   useEffect(() => {
     if (activeModal === 'inventory') {
+      setCreatedPurchaseReceipt(null);
       setInvPurchaseDate(todayIso());
       setInvLotNumber(`LOT-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${String(
         (state.stockPurchases?.length || 0) + 1
@@ -223,10 +380,10 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
       } else {
         setInvMode('new');
         setInvExistingId('');
-        setInvSku('');
         setInvName('');
         setInvCategory('Feed');
-        setInvUnit('kg');
+        setInvUnitSelect('kg');
+        setInvCustomUnit('');
         setInvCost('');
         setInvReorderLevel('50');
         setInvSupplier('');
@@ -512,6 +669,87 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
           const balanceDue = Math.max(0, totalCost - effectivePaid);
           const selectedExisting = state.inventory.find((i) => i.id === invExistingId);
 
+          if (createdPurchaseReceipt) {
+            return (
+              <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold text-emerald-950 dark:text-emerald-100">
+                      {createdPurchaseReceipt.isNew
+                        ? tr(language, 'Bidhaa Mpya & Manunuzi Yameundwa!', 'New Product & Purchase Created!')
+                        : tr(language, 'Manunuzi & Akiba Vimesasishwa!', 'Purchase & Stock Updated!')}
+                    </div>
+                    <div className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-300">
+                      {createdPurchaseReceipt.itemName} · {createdPurchaseReceipt.quantity} {createdPurchaseReceipt.unit}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 rounded-xl border border-emerald-200/80 bg-white p-3 text-xs dark:border-emerald-900/50 dark:bg-slate-900">
+                  <div>
+                    <div className="text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Msimbo wa Bidhaa (SKU - Otomatiki)', 'Auto-Generated SKU')}
+                    </div>
+                    <div className="mt-0.5 font-mono text-sm font-extrabold text-[#1D72E8] dark:text-sky-400">
+                      {createdPurchaseReceipt.sku}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Namba ya Kundi / Lot', 'Batch / Lot #')}
+                    </div>
+                    <div className="mt-0.5 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {createdPurchaseReceipt.lotNumber}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Kundi', 'Group')}
+                    </div>
+                    <div className="mt-0.5 font-bold text-slate-800 dark:text-slate-200">
+                      {tDomain(language, createdPurchaseReceipt.category)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Jumla ya Thamani', 'Total Value')}
+                    </div>
+                    <div className="mt-0.5 font-extrabold text-emerald-700 tabular-nums dark:text-emerald-400">
+                      {formatTzs(createdPurchaseReceipt.totalCostTzs)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setCreatedPurchaseReceipt(null);
+                      setInvQty('');
+                      setInvInvoiceNo('');
+                      setInvNotes('');
+                      setInvLotNumber(
+                        `LOT-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${String(
+                          (state.stockPurchases?.length || 0) + 1
+                        ).padStart(2, '0')}`
+                      );
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>{tr(language, 'Manunuzi Mengine', 'Another Purchase')}</span>
+                  </Button>
+                  <Button variant="success" onClick={onClose}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{tr(language, 'Sawa, Funga', 'Done')}</span>
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div className="space-y-3.5">
               {/* Mode Switch: Restock Existing vs Create New */}
@@ -524,7 +762,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                       applyExistingItemSelection(invExistingId || state.inventory[0].id);
                     }
                   }}
-                  className={`min-h-[40px] rounded-lg px-3 text-xs font-bold transition-colors ${
+                  className={`min-h-[40px] rounded-lg px-2.5 text-xs font-bold transition-colors ${
                     invMode === 'existing'
                       ? 'bg-[#136EE6] text-white shadow-xs'
                       : 'text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'
@@ -532,8 +770,8 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 >
                   {tr(
                     language,
-                    `Ongeza Bidhaa Iliyopo (${state.inventory.length})`,
-                    `Restock Existing Product (${state.inventory.length})`
+                    `Ongeza Iliyopo (${state.inventory.length})`,
+                    `Restock Existing (${state.inventory.length})`
                   )}
                 </button>
                 <button
@@ -541,20 +779,22 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   onClick={() => {
                     setInvMode('new');
                     setInvExistingId('');
-                    setInvSku(`SKU-${String(state.inventory.length + 101)}`);
                     setInvName('');
+                    setInvCategory('Feed');
+                    setInvUnitSelect('kg');
+                    setInvCustomUnit('');
                     setInvCost('');
                     setInvReorderLevel('50');
                     setInvSupplier('');
                     setInvExpiryDate('');
                   }}
-                  className={`min-h-[40px] rounded-lg px-3 text-xs font-bold transition-colors ${
+                  className={`min-h-[40px] rounded-lg px-2.5 text-xs font-bold transition-colors ${
                     invMode === 'new'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'text-slate-700 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'
                   }`}
                 >
-                  {tr(language, '+ Unda Bidhaa / Kifaa Kipya', '+ Create New Product / Item')}
+                  {tr(language, '+ Bidhaa Mpya', '+ New Product')}
                 </button>
               </div>
 
@@ -576,85 +816,90 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     <option value="">{tr(language, 'Chagua bidhaa ya kuongeza akiba...', 'Choose an item to restock...')}</option>
                     {state.inventory.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name} ({tDomain(language, item.category)} · {tr(language, 'Ipo', 'Current')}: {item.stock.toLocaleString()} {item.unit})
+                        {item.name} ({tDomain(language, item.category)} · {item.stock.toLocaleString()} {item.unit})
                       </option>
                     ))}
                   </select>
                   {selectedExisting && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-3 rounded-lg bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
+                    <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-sky-50 px-3 py-1.5 text-[11px] font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
                       <span>
-                        {tr(language, 'Akiba ya Sasa:', 'Current Stock:')}{' '}
+                        {tr(language, 'Sasa:', 'Current:')}{' '}
                         <strong className="tabular-nums">
-                          {selectedExisting.stock.toLocaleString()} {selectedExisting.unit}
+                          {selectedExisting.stock.toLocaleString()} {effectiveInvUnit}
                         </strong>
                       </span>
                       <span>
-                        {tr(language, 'Akiba Mpya Baada ya Kupokea:', 'New Stock After Delivery:')}{' '}
+                        {tr(language, 'Baada ya Manunuzi:', 'After Restock:')}{' '}
                         <strong className="tabular-nums text-emerald-700 dark:text-emerald-300">
-                          {(selectedExisting.stock + Math.max(0, parsedQty)).toLocaleString()} {invUnit}
+                          {(selectedExisting.stock + Math.max(0, parsedQty)).toLocaleString()} {effectiveInvUnit}
                         </strong>
                       </span>
                       <span>
-                        {tr(language, 'Kiwango cha Chini:', 'Reorder Level:')} {selectedExisting.reorderLevel} {selectedExisting.unit}
+                        {tr(language, 'Bei ya Kawaida:', 'Default Price:')}{' '}
+                        <strong className="tabular-nums">{formatTzs(selectedExisting.unitCostTzs)}</strong>
                       </span>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Product Identification Row */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="qm-inv-name"
-                    className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
+              {/* Product Name (SKU is auto-generated & revealed after creation) */}
+              <div>
+                <label
+                  htmlFor="qm-inv-name"
+                  className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
+                >
+                  <span className="flex items-center gap-1.5">
                     <span>{tr(language, 'Jina la Bidhaa *', 'Item / Product Name *')}</span>
-                    <ValidCheck valid={invName.trim().length > 1} />
-                  </label>
-                  <input
-                    id="qm-inv-name"
-                    type="text"
-                    placeholder={tr(language, 'mf. Tilapia Grower Pellets 3mm', 'e.g. Tilapia Grower Pellets 3mm')}
-                    value={invName}
-                    onChange={(e) => setInvName(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[44px]`}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="qm-inv-sku"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
-                  >
-                    {tr(language, 'Msimbo wa Bidhaa (SKU)', 'SKU / Item Code')}
-                  </label>
-                  <input
-                    id="qm-inv-sku"
-                    type="text"
-                    placeholder={tr(language, 'mf. FEED-GRW-3MM', 'e.g. FEED-GRW-3MM')}
-                    value={invSku}
-                    onChange={(e) => setInvSku(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[44px] font-mono`}
-                  />
-                </div>
+                    {invMode === 'new' && (
+                      <span className="text-[10.5px] font-normal text-slate-400 dark:text-slate-500">
+                        · {tr(language, 'SKU huundwa kiotomatiki baada ya kuhifadhi', 'SKU auto-generated on save')}
+                      </span>
+                    )}
+                  </span>
+                  <ValidCheck valid={invName.trim().length > 1} />
+                </label>
+                <input
+                  id="qm-inv-name"
+                  type="text"
+                  readOnly={invMode === 'existing' && Boolean(selectedExisting)}
+                  placeholder={tr(language, 'mf. Tilapia Grower Pellets 3mm', 'e.g. Tilapia Grower Pellets 3mm')}
+                  value={invName}
+                  onChange={(e) => setInvName(e.target.value)}
+                  className={`${INPUT_CLASS} min-h-[44px] ${
+                    invMode === 'existing' && selectedExisting
+                      ? 'border-sky-200 bg-sky-50/50 font-semibold dark:border-sky-900/60 dark:bg-sky-950/25'
+                      : ''
+                  }`}
+                />
               </div>
 
-              {/* Category, Purchase Date, Reorder Level */}
+              {/* Group (Category), Purchase Date, Reorder Level */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label
                     htmlFor="qm-inv-cat"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+                    className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {tr(language, 'Kundi *', 'Category *')}
+                    <span>{tr(language, 'Kundi *', 'Group / Category *')}</span>
+                    {invMode === 'existing' && selectedExisting && (
+                      <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        {tr(language, 'Otomatiki', 'Auto')}
+                      </span>
+                    )}
                   </label>
                   <select
                     id="qm-inv-cat"
+                    disabled={invMode === 'existing' && Boolean(selectedExisting)}
                     value={invCategory}
                     onChange={(e) =>
                       setInvCategory(e.target.value as 'Feed' | 'Fingerlings' | 'Medicine' | 'Fuel' | 'Equipment')
                     }
-                    className={`${INPUT_CLASS} min-h-[44px]`}
+                    className={`${INPUT_CLASS} min-h-[44px] ${
+                      invMode === 'existing' && selectedExisting
+                        ? 'border-sky-200 bg-sky-50/60 font-semibold opacity-95 dark:border-sky-900/60 dark:bg-sky-950/30'
+                        : ''
+                    }`}
                   >
                     <option value="Feed">{tDomain(language, 'Feed')}</option>
                     <option value="Fingerlings">{tDomain(language, 'Fingerlings')}</option>
@@ -683,7 +928,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     htmlFor="qm-inv-reorder"
                     className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {tr(language, 'Kiwango cha Chini cha Kuagiza', 'Min Reorder Level')}
+                    {tr(language, 'Kiwango cha Chini', 'Min Reorder Level')}
                   </label>
                   <input
                     id="qm-inv-reorder"
@@ -696,7 +941,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 </div>
               </div>
 
-              {/* Quantity, Unit, Unit Cost */}
+              {/* Quantity, Unit (Kipimo - full catalog), Unit Cost (Price) */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label
@@ -709,6 +954,7 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                   <input
                     id="qm-inv-qty"
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="0.5"
                     placeholder={tr(language, 'mf. 500', 'e.g. 500')}
@@ -720,43 +966,95 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                 <div>
                   <label
                     htmlFor="qm-inv-unit"
-                    className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300"
+                    className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    {tr(language, 'Kipimo *', 'Unit *')}
+                    <span>{tr(language, 'Kipimo *', 'Unit (Kipimo) *')}</span>
+                    {invMode === 'existing' && selectedExisting && (
+                      <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        {tr(language, 'Otomatiki', 'Auto')}
+                      </span>
+                    )}
                   </label>
                   <select
                     id="qm-inv-unit"
-                    value={['kg', 'bags', 'pcs', 'litres', 'bottles', 'packs', 'fish'].includes(invUnit) ? invUnit : 'other'}
-                    onChange={(e) => {
-                      if (e.target.value !== 'other') setInvUnit(e.target.value);
-                    }}
-                    className={`${INPUT_CLASS} min-h-[44px]`}
+                    disabled={invMode === 'existing' && Boolean(selectedExisting)}
+                    value={invUnitSelect}
+                    onChange={(e) => setInvUnitSelect(e.target.value)}
+                    className={`${INPUT_CLASS} min-h-[44px] ${
+                      invMode === 'existing' && selectedExisting
+                        ? 'border-sky-200 bg-sky-50/60 font-semibold opacity-95 dark:border-sky-900/60 dark:bg-sky-950/30'
+                        : ''
+                    }`}
                   >
-                    <option value="kg">{tr(language, 'Kilogramu (kg)', 'Kilograms (kg)')}</option>
-                    <option value="bags">{tr(language, 'Mifuko (25kg / 50kg)', 'Bags (25kg / 50kg)')}</option>
-                    <option value="litres">{tr(language, 'Lita', 'Litres')}</option>
-                    <option value="bottles">{tr(language, 'Chupa', 'Bottles')}</option>
-                    <option value="pcs">{tr(language, 'Vipande (pcs)', 'Pieces (pcs)')}</option>
-                    <option value="packs">{tr(language, 'Pakiti / Sachet', 'Packs / Sachets')}</option>
-                    <option value="fish">{tr(language, 'Vifaranga Hai (samaki)', 'Live Fingerlings (fish)')}</option>
+                    <optgroup label={tr(language, 'Uzito & Mifuko', 'Weight & Bags')}>
+                      <option value="kg">{tr(language, 'Kilogramu (kg)', 'Kilograms (kg)')}</option>
+                      <option value="g">{tr(language, 'Gramu (g)', 'Grams (g)')}</option>
+                      <option value="tonnes">{tr(language, 'Tani (tonnes)', 'Tonnes (t)')}</option>
+                      <option value="bags">{tr(language, 'Mifuko (25kg / 50kg)', 'Bags (25kg / 50kg)')}</option>
+                    </optgroup>
+                    <optgroup label={tr(language, 'Vimiminika & Chupa', 'Liquids & Containers')}>
+                      <option value="litres">{tr(language, 'Lita (L)', 'Litres (L)')}</option>
+                      <option value="ml">{tr(language, 'Mililita (ml)', 'Millilitres (ml)')}</option>
+                      <option value="bottles">{tr(language, 'Chupa (bottles)', 'Bottles')}</option>
+                      <option value="jerrycans">{tr(language, 'Madumu / Galoni (20L)', 'Jerrycans (20L)')}</option>
+                      <option value="drums">{tr(language, 'Mapipa (200L)', 'Drums (200L)')}</option>
+                    </optgroup>
+                    <optgroup label={tr(language, 'Dawa, Pakiti & Vifaa', 'Medicine, Packs & Units')}>
+                      <option value="pcs">{tr(language, 'Vipande / Kimoja (pcs)', 'Pieces (pcs)')}</option>
+                      <option value="packs">{tr(language, 'Pakiti (packs)', 'Packs')}</option>
+                      <option value="sachets">{tr(language, 'Sacheti / Vikaratasi', 'Sachets')}</option>
+                      <option value="tablets">{tr(language, 'Vidonge (tablets)', 'Tablets')}</option>
+                      <option value="vials">{tr(language, 'Chupa Ndogo / Vials', 'Vials / Ampoules')}</option>
+                      <option value="tubes">{tr(language, 'Mifereji / Tubes', 'Tubes')}</option>
+                      <option value="boxes">{tr(language, 'Bokosi / Sanduku', 'Boxes')}</option>
+                      <option value="cartons">{tr(language, 'Katoni (cartons)', 'Cartons')}</option>
+                      <option value="sets">{tr(language, 'Seti Kamili (sets)', 'Sets')}</option>
+                    </optgroup>
+                    <optgroup label={tr(language, 'Urefu & Viumbe Hai', 'Length & Live Stock')}>
+                      <option value="rolls">{tr(language, 'Roli (rolls)', 'Rolls')}</option>
+                      <option value="meters">{tr(language, 'Mita (m)', 'Meters (m)')}</option>
+                      <option value="fish">{tr(language, 'Vifaranga / Samaki Hai', 'Live Fingerlings / Fish')}</option>
+                      <option value="other">{tr(language, 'Kipimo Kingine (Andika)...', 'Other Custom Unit...')}</option>
+                    </optgroup>
                   </select>
+                  {invUnitSelect === 'other' && (
+                    <input
+                      type="text"
+                      value={invCustomUnit}
+                      onChange={(e) => setInvCustomUnit(e.target.value)}
+                      placeholder={tr(language, 'Andika kipimo mf. Tray / Ndoo', 'Enter unit e.g. Tray / Bucket')}
+                      className={`${INPUT_CLASS} mt-1.5 min-h-[38px] text-xs`}
+                    />
+                  )}
                 </div>
                 <div>
                   <label
                     htmlFor="qm-inv-cost"
                     className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    <span>{tr(language, 'Gharama kwa Kipimo (TZS) *', 'Unit Cost (TZS) *')}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>{tr(language, 'Bei kwa Kipimo (TZS) *', 'Unit Price (TZS) *')}</span>
+                      {invMode === 'existing' && selectedExisting && (
+                        <span className="rounded bg-[#0B7E91] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {tr(language, 'Otomatiki', 'Auto')}
+                        </span>
+                      )}
+                    </span>
                     <ValidCheck valid={parsedCost > 0} />
                   </label>
                   <input
                     id="qm-inv-cost"
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     placeholder={tr(language, 'mf. 2800', 'e.g. 2800')}
                     value={invCost}
                     onChange={(e) => setInvCost(e.target.value)}
-                    className={`${INPUT_CLASS} min-h-[44px] font-bold tabular-nums`}
+                    className={`${INPUT_CLASS} min-h-[44px] font-bold tabular-nums ${
+                      invMode === 'existing' && selectedExisting
+                        ? 'border-sky-200 bg-sky-50/50 dark:border-sky-900/60 dark:bg-sky-950/25'
+                        : ''
+                    }`}
                   />
                 </div>
               </div>
@@ -937,8 +1235,8 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     showValidationError(
                       tr(
                         language,
-                        'Chagua bidhaa iliyopo au badili kwenda Unda Bidhaa Mpya.',
-                        'Select an existing inventory item or switch to Create New Product.'
+                        'Chagua bidhaa iliyopo au badili kwenda Bidhaa Mpya.',
+                        'Select an existing inventory item or switch to New Product.'
                       )
                     );
                     return;
@@ -949,6 +1247,16 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                         language,
                         'Jina la bidhaa, namba ya lot, na jina la msambazaji vinahitajika.',
                         'Item name, batch/lot number, and supplier name are required.'
+                      )
+                    );
+                    return;
+                  }
+                  if (invUnitSelect === 'other' && !invCustomUnit.trim()) {
+                    showValidationError(
+                      tr(
+                        language,
+                        'Andika jina la kipimo chako kingine.',
+                        'Please enter your custom unit name.'
                       )
                     );
                     return;
@@ -973,14 +1281,18 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     );
                     return;
                   }
-                  onAddInventory({
+                  const autoSku =
+                    (invMode === 'existing' && selectedExisting?.sku) ||
+                    generateAutoSku(invCategory, invName.trim(), state.inventory.length);
+
+                  const created = onAddInventory({
                     mode: invMode,
                     existingItemId: invMode === 'existing' ? invExistingId : undefined,
-                    sku: invSku.trim() || undefined,
+                    sku: autoSku,
                     name: invName.trim(),
                     category: invCategory,
                     quantity: parsedQty,
-                    unit: invUnit.trim() || 'kg',
+                    unit: effectiveInvUnit,
                     unitCostTzs: parsedCost,
                     reorderLevel: parsedReorder,
                     lotNumber: invLotNumber.trim(),
@@ -993,12 +1305,21 @@ export const QuickActionModals: React.FC<QuickActionModalsProps> = ({
                     paidAmountTzs: effectivePaid,
                     notes: invNotes.trim() || undefined,
                   });
-                  triggerSuccessAndClose();
+
+                  triggerHaptic(10);
+                  setCreatedPurchaseReceipt({
+                    sku: created?.sku || autoSku,
+                    lotNumber: created?.lotNumber || invLotNumber.trim(),
+                    itemName: created?.itemName || invName.trim(),
+                    category: invCategory,
+                    quantity: parsedQty,
+                    unit: effectiveInvUnit,
+                    totalCostTzs: totalCost,
+                    isNew: created?.isNew ?? invMode === 'new',
+                  });
                 }}
               >
-                {saveSuccess
-                  ? tr(language, 'Manunuzi na Akiba Vimehifadhiwa', 'Purchase & Stock Recorded')
-                  : tr(language, 'Hifadhi Manunuzi na Sasisha Bohari', 'Save Purchase & Update Stock')}
+                {tr(language, 'Hifadhi Manunuzi na Sasisha Bohari', 'Save Purchase & Update Stock')}
               </Button>
             </div>
           );
@@ -1692,6 +2013,44 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
       )
     : [];
 
+  const [resolvedPlaces, setResolvedPlaces] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!pond || state.offlineMode) return;
+    const coordKey = `${pond.gps[0].toFixed(5)},${pond.gps[1].toFixed(5)}`;
+    if (resolvedPlaces[coordKey]) return;
+
+    let cancelled = false;
+    fetch(
+      `/api/gis/reverse-geocode?lat=${encodeURIComponent(pond.gps[0])}&lng=${encodeURIComponent(pond.gps[1])}`
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { placeName?: string; shortName?: string } | null) => {
+        if (cancelled || !data?.placeName) return;
+        // Only cache real human-readable names, not raw coordinate fallbacks
+        const looksLikeRawCoords = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(data.placeName.trim());
+        if (!looksLikeRawCoords) {
+          setResolvedPlaces((prev) => ({ ...prev, [coordKey]: data.placeName! }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pond, state.offlineMode, resolvedPlaces]);
+
+  const activeCoordKey = activePond
+    ? `${activePond.gps[0].toFixed(5)},${activePond.gps[1].toFixed(5)}`
+    : '';
+  const readableLocation = activePond
+    ? resolvedPlaces[activeCoordKey] ||
+      farm?.placeName ||
+      farm?.name ||
+      farm?.region ||
+      tr(language, 'Eneo la Shamba Tanzania', 'Tanzania Aquaculture Site')
+    : '';
+
   const cells = activePond
     ? Array.from({ length: 49 }, (_, i) => {
         const hash = (activePond.code.charCodeAt(i % activePond.code.length) * (i + 7)) % 5;
@@ -1746,7 +2105,7 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
 
           {/* Digital Geographical Identity */}
           <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs dark:border-sky-900/60 dark:bg-sky-950/30">
-            <div className="mb-1.5 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between">
               <span className="font-bold text-slate-900 dark:text-white">
                 {tr(language, 'Utambulisho wa Kijiografia wa Kidijitali', 'Digital Geographical Identity')}
               </span>
@@ -1756,6 +2115,41 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                   : tr(language, 'Inasubiri Uthibitisho', 'Pending Verification')}
               </span>
             </div>
+
+            {/* Real Location Name & Directions */}
+            <div className="mb-2.5 rounded-lg border border-sky-200/80 bg-white/90 p-2.5 dark:border-sky-800/60 dark:bg-slate-900/70">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#1D72E8] dark:text-sky-400" />
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      {tr(language, 'Mahali Halisi na Njia ya Kufika', 'Real Location & Directions')}
+                    </div>
+                    <div className="mt-0.5 text-xs font-bold text-slate-900 dark:text-white">
+                      {readableLocation}
+                    </div>
+                    {farm && (
+                      <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300">
+                        {farm.name} · {farm.waterSource}
+                      </div>
+                    )}
+                    <div className="mt-1 font-mono text-[10.5px] text-slate-500 tabular-nums dark:text-slate-400">
+                      {tr(language, 'Majira ya GPS:', 'GPS Coordinates:')} {activePond.gps[0].toFixed(5)}, {activePond.gps[1].toFixed(5)}
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${activePond.gps[0].toFixed(6)},${activePond.gps[1].toFixed(6)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[#1D72E8] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-blue-700"
+                >
+                  <Navigation className="h-3 w-3" />
+                  <span>{tr(language, 'Elekeza', 'Navigate')}</span>
+                </a>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700 tabular-nums dark:text-slate-300">
               <div>
                 {tr(language, 'Eneo la Juu', 'Surface Area')}:{' '}
@@ -1768,10 +2162,8 @@ export const PondQrModal: React.FC<PondQrModalProps> = ({ pond, state, onClose, 
                 <strong>{activePond.perimeterM ? `${activePond.perimeterM.toLocaleString()} m` : '—'}</strong>
               </div>
               <div>
-                {tr(language, 'Kituo cha GPS', 'Center GPS')}:{' '}
-                <strong className="font-mono">
-                  {activePond.gps[0].toFixed(5)}, {activePond.gps[1].toFixed(5)}
-                </strong>
+                {tr(language, 'Ukubwa wa Maji', 'Water Volume')}:{' '}
+                <strong>{activePond.waterCapacityM3.toLocaleString()} m³</strong>
               </div>
               <div>
                 {tr(language, 'Pembe / Mbinu', 'Corners / Method')}:{' '}

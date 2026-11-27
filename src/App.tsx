@@ -471,6 +471,32 @@ export default function App() {
           ? ('Partial' as const)
           : ('Pending Debt' as const);
 
+    const existingPre =
+      (payload.existingItemId
+        ? state.inventory.find((i) => i.id === payload.existingItemId)
+        : undefined) ||
+      state.inventory.find((i) => i.name.toLowerCase() === payload.name.toLowerCase());
+
+    const catPrefix =
+      payload.category === 'Feed'
+        ? 'FD'
+        : payload.category === 'Fingerlings'
+          ? 'FG'
+          : payload.category === 'Medicine'
+            ? 'MD'
+            : payload.category === 'Fuel'
+              ? 'FL'
+              : 'EQ';
+    const nameSlug =
+      payload.name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 3) || 'ITM';
+    const resolvedSku =
+      existingPre?.sku ||
+      payload.sku ||
+      `${catPrefix}-${nameSlug}-${String(101 + state.inventory.length).padStart(3, '0')}`;
+
     const prevSnapshot = state;
     setState((prev) => {
       const existing =
@@ -480,6 +506,7 @@ export default function App() {
         prev.inventory.find((i) => i.name.toLowerCase() === payload.name.toLowerCase());
 
       const newItemId = existing?.id || `inv-${Date.now()}`;
+      const finalSku = existing?.sku || resolvedSku;
       const updatedInventory = existing
         ? prev.inventory.map((i) => {
             if (i.id !== existing.id) return i;
@@ -488,7 +515,7 @@ export default function App() {
             return {
               ...i,
               name: payload.name,
-              sku: payload.sku || i.sku,
+              sku: finalSku,
               category: payload.category,
               stock: nextStock,
               unit: payload.unit,
@@ -505,7 +532,7 @@ export default function App() {
         : [
             {
               id: newItemId,
-              sku: payload.sku || `SKU-${Date.now().toString().slice(-4)}`,
+              sku: finalSku,
               name: payload.name,
               category: payload.category,
               stock: payload.quantity,
@@ -530,6 +557,7 @@ export default function App() {
           {
             id: `pur-${Date.now()}`,
             itemId: newItemId,
+            sku: finalSku,
             date: payload.purchaseDate,
             itemName: payload.name,
             category: payload.category,
@@ -555,7 +583,7 @@ export default function App() {
             date: payload.purchaseDate,
             type: 'Expense',
             category: finCategory,
-            description: `${existing ? 'Restocked' : 'New item'} – ${payload.name} (${payload.quantity} ${payload.unit})${
+            description: `${existing ? 'Restocked' : 'New item'} – ${payload.name} (${payload.quantity} ${payload.unit}) · SKU ${finalSku}${
               payload.invoiceNo ? ` · Inv ${payload.invoiceNo}` : ''
             }`,
             amountTzs: totalCost,
@@ -568,7 +596,7 @@ export default function App() {
           {
             id: `act-${Date.now()}`,
             kind: 'purchase',
-            title: `${existing ? 'Restocked' : 'Purchase added'} – ${payload.name}`,
+            title: `${existing ? 'Restocked' : 'Purchase added'} – ${payload.name} (${finalSku})`,
             subtitle: `${payload.quantity} ${payload.unit} (${formatTzsInline(totalCost)}) from ${payload.supplier}`,
             timeAgo: 'Just now',
           },
@@ -582,7 +610,7 @@ export default function App() {
             actorRole: prev.activeUser.role,
             module: 'Inventory & Procurement',
             action: existing ? 'Existing Inventory Restocked' : 'New Inventory Product Purchased',
-            details: `${payload.name} (+${payload.quantity} ${payload.unit} @ TZS ${payload.unitCostTzs.toLocaleString()}) from ${payload.supplier}. Lot: ${payload.lotNumber}. Status: ${payload.paymentStatus}.`,
+            details: `${payload.name} [SKU: ${finalSku}] (+${payload.quantity} ${payload.unit} @ TZS ${payload.unitCostTzs.toLocaleString()}) from ${payload.supplier}. Lot: ${payload.lotNumber}. Status: ${payload.paymentStatus}.`,
             pinVerified: false,
           },
           ...prev.auditLogs,
@@ -593,11 +621,20 @@ export default function App() {
     showToast(
       tr(
         language,
-        `Imehifadhiwa ${payload.quantity} ${payload.unit} za ${payload.name} (${tDomain(language, payload.paymentStatus)}).`,
-        `Saved ${payload.quantity} ${payload.unit} of ${payload.name} (${payload.paymentStatus}).`
+        `Imehifadhiwa ${payload.quantity} ${payload.unit} za ${payload.name} · SKU: ${resolvedSku}`,
+        `Saved ${payload.quantity} ${payload.unit} of ${payload.name} · SKU: ${resolvedSku}`
       ),
       { kind: 'stock', undoSnapshot: prevSnapshot }
     );
+    return {
+      sku: resolvedSku,
+      lotNumber: payload.lotNumber,
+      itemName: payload.name,
+      quantity: payload.quantity,
+      unit: payload.unit,
+      totalCostTzs: totalCost,
+      isNew: !existingPre,
+    };
   };
 
   const handleRecordWater = (payload: {
@@ -2454,16 +2491,17 @@ export default function App() {
             isScrolled ? 'shadow-md dark:shadow-slate-950/60' : ''
           }`}
         >
-          <div
-            className="relative flex flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 sm:px-5 sm:py-3"
-            style={{
-              backgroundImage: `linear-gradient(90deg, rgba(240,247,255,0.95) 0%, rgba(240,247,255,0.82) 48%, rgba(255,255,255,0.35) 100%), url(${ASSET_IMAGES.banner})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          >
-            {/* Dark overlay layer for crisp readability over scenic banner in dark mode */}
-            <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-[#07162c]/95 via-[#091c38]/90 to-[#0d1a2e]/85 dark:block" />
+          <div className="relative flex flex-wrap items-center justify-between gap-2.5 overflow-hidden px-3.5 py-2.5 sm:px-5 sm:py-3">
+            {/* Crisp, high-visibility scenic aquaculture background image */}
+            <img
+              src={ASSET_IMAGES.banner}
+              alt={t.heroTitle}
+              referrerPolicy="no-referrer"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_62%] contrast-[1.06] saturate-[1.12]"
+            />
+
+            {/* Targeted directional contrast scrim: protects left headline legibility while keeping center-right ponds crystal clear */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#eef6ff]/92 via-[#eef6ff]/62 via-42% to-transparent dark:from-[#07162c]/88 dark:via-[#07162c]/52 dark:via-45% dark:to-[#07162c]/12" />
 
             <div className="relative z-10 flex items-center gap-2.5 sm:gap-3">
               <button
@@ -2475,10 +2513,10 @@ export default function App() {
                 <Menu className="h-4 w-4" />
               </button>
               <div>
-                <h1 className="font-display text-base font-extrabold tracking-tight text-[#0A2540] dark:text-white sm:text-[20px]">
+                <h1 className="font-display text-base font-extrabold tracking-tight text-[#0A2540] drop-shadow-[0_1px_1px_rgba(255,255,255,0.75)] dark:text-white dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] sm:text-[20px]">
                   {t.heroTitle}
                 </h1>
-                <p className="hidden text-xs font-semibold text-[#16538E] dark:text-sky-300 sm:block">
+                <p className="hidden text-xs font-semibold text-[#114A80] drop-shadow-[0_1px_1px_rgba(255,255,255,0.75)] dark:text-sky-200 dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] sm:block">
                   {t.heroSubtitle}
                 </p>
               </div>
@@ -2727,7 +2765,10 @@ export default function App() {
               animate="animate"
               exit="exit"
             >
-              {devicePwa.isMobile && mobileFullWorkspace && MOBILE_SHOWCASE_NAVS.has(activeNav) && (
+              {devicePwa.isMobile &&
+                mobileFullWorkspace &&
+                MOBILE_SHOWCASE_NAVS.has(activeNav) &&
+                activeNav !== 'harvest-sales' && (
                 <div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
                   <button
                     type="button"
@@ -3435,7 +3476,9 @@ export default function App() {
               onOpenQuickSale={openQuickSaleModal}
               onQuickCreateCustomer={handleQuickCreateCustomer}
               onSubmitSale={handleCreateQuickSale}
-              onBackToMenu={() => setActiveNav('dashboard')}
+              onBackToMenu={() =>
+                devicePwa.isMobile ? setMobileFullWorkspace(false) : setActiveNav('dashboard')
+              }
               onOpenFishStock={() => setActiveNav('fish-stock')}
               onViewInvoice={(sale) => setActiveReceiptSaleId(sale.id)}
               onCollectPayment={handleCollectSalePayment}

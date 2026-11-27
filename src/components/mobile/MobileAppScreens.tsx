@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   AlertTriangle,
@@ -16,14 +16,18 @@ import {
   Lightbulb,
   MapPin,
   MoreHorizontal,
+  Navigation,
   Package,
+  PackagePlus,
   Plus,
+  QrCode,
   ShieldCheck,
   ShoppingCart,
   Thermometer,
   TrendingUp,
   Utensils,
   Waves,
+  X,
 } from 'lucide-react';
 import {
   AquacultureState,
@@ -108,6 +112,11 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
   const [userGps, setUserGps] = useState<{ gps: [number, number]; accuracyM?: number } | null>(null);
   const [selectedBatchDetail, setSelectedBatchDetail] = useState<FishBatch | null>(null);
   const [activeTrendIdx, setActiveTrendIdx] = useState<number>(5);
+  const mapCardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSelectedMapPondId(null);
+  }, [selectedFarmId]);
 
   const filteredPonds = useMemo(
     () =>
@@ -517,30 +526,42 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
           </div>
         </div>
 
-        {/* Quick Actions 4-Tile Strip */}
+        {/* Quick Actions 6-Tile (3x2) Grid */}
         <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-rest dark:border-slate-800 dark:bg-slate-900">
           <h3 className="mb-2.5 font-display text-sm font-extrabold text-[#081C3A] dark:text-white">
             {tr(language, 'Vitendo vya Haraka', 'Quick Actions')}
           </h3>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-3 gap-2">
             {[
               {
-                label: tr(language, 'Weka Akiba', 'Add Stock'),
-                icon: Boxes,
-                tone: 'bg-emerald-50 text-emerald-700 border-emerald-200/70 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
-                onClick: () => onNavigate('fish-stock'),
-              },
-              {
-                label: tr(language, 'Chakula', 'Log Feed'),
-                icon: Utensils,
-                tone: 'bg-sky-50 text-[#0284C7] border-sky-200/70 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800',
-                onClick: () => onQuickAction('feeding'),
+                label: tr(language, 'Manunuzi', 'Purchase'),
+                icon: PackagePlus,
+                tone: 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-800',
+                onClick: () => onQuickAction('inventory'),
               },
               {
                 label: tr(language, 'Mauzo', 'Record Sale'),
                 icon: ShoppingCart,
-                tone: 'bg-blue-50 text-[#1D72E8] border-blue-200/70 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
+                tone: 'bg-blue-50 text-[#1D72E8] border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
                 onClick: () => onOpenQuickSale(),
+              },
+              {
+                label: tr(language, 'Chakula', 'Log Feed'),
+                icon: Utensils,
+                tone: 'bg-sky-50 text-[#0284C7] border-sky-200/80 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800',
+                onClick: () => onQuickAction('feeding'),
+              },
+              {
+                label: tr(language, 'Weka Samaki', 'Fish Stock'),
+                icon: Boxes,
+                tone: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+                onClick: () => onNavigate('fish-stock'),
+              },
+              {
+                label: tr(language, 'Pima Maji', 'Water Check'),
+                icon: Droplets,
+                tone: 'bg-cyan-50 text-cyan-700 border-cyan-200/80 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800',
+                onClick: () => onQuickAction('water'),
               },
               {
                 label: tr(language, 'Zaidi', 'More'),
@@ -555,10 +576,10 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                   key={qa.label}
                   type="button"
                   onClick={qa.onClick}
-                  className={`flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-1 py-2 text-center transition-transform active:scale-95 ${qa.tone}`}
+                  className={`flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-1.5 py-2 text-center transition-transform active:scale-95 ${qa.tone}`}
                 >
                   <Icon className="h-5 w-5 shrink-0" />
-                  <span className="text-[10.5px] font-bold leading-snug break-words">
+                  <span className="text-[11px] font-bold leading-tight">
                     {qa.label}
                   </span>
                 </button>
@@ -586,8 +607,29 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
   // SCREEN 2: FARMS & PONDS / GIS MAPPING
   // =========================================================================
   if (activeNav === 'farms-ponds') {
-    const activePond =
-      filteredPonds.find((p) => p.id === selectedMapPondId) || filteredPonds[0] || null;
+    const activePond = selectedMapPondId
+      ? filteredPonds.find((p) => p.id === selectedMapPondId) || null
+      : null;
+    const currentFarm =
+      selectedFarmId !== 'all'
+        ? state.farms.find((f) => f.id === selectedFarmId) || null
+        : activePond
+          ? state.farms.find((f) => f.id === activePond.farmId) || null
+          : null;
+    const activePondFarm = activePond
+      ? state.farms.find((f) => f.id === activePond.farmId) || currentFarm
+      : currentFarm;
+    const activePondWater = activePond
+      ? state.waterReadings.find((w) => w.pondCode === activePond.code) || null
+      : null;
+    const activePondKeeper = activePond
+      ? state.employees.find((e) => e.id === activePond.assignedKeeperId) || null
+      : null;
+
+    const handleSelectPondOnMap = (pond: Pond) => {
+      setSelectedMapPondId(pond.id);
+      mapCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
 
     return (
       <div className="space-y-3">
@@ -628,15 +670,73 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
           <ChevronDown className="h-4 w-4 text-slate-400" />
         </div>
 
-        {/* Interactive Satellite Map Card with Floating Selected Pond Pill */}
+        {/* Real Human-Readable Location & Directions Banner */}
+        {currentFarm && (
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-sky-200/80 bg-sky-50/70 px-3.5 py-2.5 dark:border-sky-900/50 dark:bg-sky-950/30">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                {tr(language, 'Eneo Halisi la Shamba', 'Farm Location & Area')}
+              </div>
+              <div className="truncate text-xs font-bold text-slate-900 dark:text-white">
+                {currentFarm.placeName || currentFarm.name}
+              </div>
+            </div>
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${currentFarm.gps[0].toFixed(6)},${currentFarm.gps[1].toFixed(6)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[34px] shrink-0 items-center gap-1 rounded-xl bg-[#1D72E8] px-2.5 py-1 text-[11px] font-bold text-white shadow-xs"
+            >
+              <Navigation className="h-3 w-3" />
+              <span>{tr(language, 'Elekeza', 'Navigate')}</span>
+            </a>
+          </div>
+        )}
+
+        {/* Quick Pond Switcher Strip (Allows switching any pond on map with 1 tap) */}
+        <div
+          ref={mapCardRef}
+          className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedMapPondId(null)}
+            className={`min-h-[34px] shrink-0 rounded-xl px-3 py-1 text-xs font-bold transition-colors ${
+              !activePond
+                ? 'bg-[#081C3A] text-white shadow-xs dark:bg-[#1D72E8]'
+                : 'border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+            }`}
+          >
+            {tr(language, `Zote (${filteredPonds.length})`, `All (${filteredPonds.length})`)}
+          </button>
+          {filteredPonds.map((p) => {
+            const isSel = activePond?.id === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedMapPondId(p.id)}
+                className={`min-h-[34px] shrink-0 rounded-xl px-3 py-1 text-xs font-bold transition-colors ${
+                  isSel
+                    ? 'bg-[#1D72E8] text-white shadow-xs'
+                    : 'border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                }`}
+              >
+                {p.name}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Interactive Satellite Map Card */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-900 shadow-rest dark:border-slate-800">
-          <Suspense fallback={<MapSkeleton heightClass="h-[185px]" />}>
+          <Suspense fallback={<MapSkeleton heightClass="h-[215px]" />}>
             <LeafletFarmMap
               ponds={filteredPonds}
               farms={state.farms}
               selectedFarmId={selectedFarmId}
               mapMode="satellite"
-              heightClass="h-[185px]"
+              heightClass="h-[215px]"
               focusedPondId={activePond?.id || null}
               userLocation={userGps}
               onSelectPond={(p) => setSelectedMapPondId(p.id)}
@@ -646,34 +746,185 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
             />
           </Suspense>
 
-          {activePond && (
+          {activePond ? (
             <button
               type="button"
-              onClick={() => onSelectPondQr(activePond)}
-              className="absolute right-3 top-3 z-[400] rounded-xl border border-white/60 bg-white/95 px-3 py-1.5 text-left shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95"
+              onClick={() => setSelectedMapPondId(null)}
+              className="absolute right-2.5 top-2.5 z-[400] inline-flex items-center gap-1 rounded-xl border border-white/60 bg-white/95 px-2.5 py-1.5 text-[11px] font-bold text-slate-800 shadow-md backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
             >
-              <div className="text-xs font-extrabold text-slate-900 dark:text-white">
-                {activePond.name}
-              </div>
-              <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px] font-bold text-emerald-700 dark:text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span>{tDomain(language, activePond.status)}</span>
-              </div>
+              <X className="h-3 w-3 text-slate-500" />
+              <span>{tr(language, 'Ona Zote', 'Show All')}</span>
             </button>
+          ) : (
+            <div className="pointer-events-none absolute left-2.5 top-2.5 z-[400] rounded-xl border border-white/50 bg-white/90 px-2.5 py-1 text-[10.5px] font-semibold text-slate-700 shadow-sm backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-200">
+              {tr(language, 'Gusa bwawa lolote kuona maelezo', 'Tap any pond to inspect details')}
+            </div>
           )}
         </div>
+
+        {/* Full Selected Pond Details Card (shown dynamically for whichever pond user selects) */}
+        {activePond && (
+          <div className="rounded-2xl border border-sky-200 bg-white p-3.5 shadow-rest dark:border-sky-800/60 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-display text-sm font-extrabold text-slate-900 dark:text-white">
+                    {activePond.name}
+                  </span>
+                  <span className="font-mono text-xs font-bold text-[#1D72E8] dark:text-sky-400">
+                    ({activePond.code})
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
+                      activePond.status === 'Attention'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'
+                        : activePond.status === 'Harvest Ready'
+                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'
+                    }`}
+                  >
+                    {tDomain(language, activePond.status)}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {tDomain(language, activePond.unitType)} · {tDomain(language, activePond.species)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMapPondId(null)}
+                aria-label={tr(language, 'Funga maelezo ya bwawa', 'Close pond details')}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Real Location Name & Directions */}
+            <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1D72E8]" />
+                  <span className="truncate">
+                    {activePondFarm?.placeName || activePondFarm?.name || activePondFarm?.region}
+                  </span>
+                </div>
+                <div className="mt-0.5 font-mono text-[10px] text-slate-500 tabular-nums dark:text-slate-400">
+                  GPS: {activePond.gps[0].toFixed(5)}, {activePond.gps[1].toFixed(5)}
+                </div>
+              </div>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${activePond.gps[0].toFixed(6)},${activePond.gps[1].toFixed(6)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-lg border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-bold text-[#1D72E8] hover:bg-sky-50 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-300"
+              >
+                <Navigation className="h-3 w-3" />
+                <span>{tr(language, 'Fika Hapa', 'Directions')}</span>
+              </a>
+            </div>
+
+            {/* Full Pond Specs & Live Telemetry Grid */}
+            <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  {tr(language, 'Samaki / Uwezo', 'Stocking')}
+                </div>
+                <div className="mt-0.5 font-mono text-xs font-extrabold text-slate-900 tabular-nums dark:text-white">
+                  {formatNumber(activePond.currentFish)} / {formatNumber(activePond.maxCapacity)}
+                </div>
+                <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                  {activePond.maxCapacity > 0
+                    ? `${Math.round((activePond.currentFish / activePond.maxCapacity) * 100)}% ${tr(language, 'imejaa', 'utilized')}`
+                    : '—'}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  {tr(language, 'Eneo & Vipimo', 'Area & Size')}
+                </div>
+                <div className="mt-0.5 font-mono text-xs font-extrabold text-slate-900 tabular-nums dark:text-white">
+                  {activePond.areaSqm
+                    ? `${activePond.areaSqm.toLocaleString()} m²`
+                    : `${activePond.waterCapacityM3.toLocaleString()} m³`}
+                </div>
+                <div className="truncate text-[10.5px] text-slate-500 tabular-nums dark:text-slate-400">
+                  {activePond.dimensions}
+                  {activePond.perimeterM ? ` · ${activePond.perimeterM} m` : ''}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  {tr(language, 'Ubora wa Maji', 'Water Quality')}
+                </div>
+                <div className="mt-0.5 font-mono text-xs font-extrabold text-slate-900 tabular-nums dark:text-white">
+                  {activePondWater
+                    ? `${activePondWater.temperature}°C · DO ${activePondWater.dissolvedOxygen}`
+                    : tr(language, 'Hakuna kipimo bado', 'No reading yet')}
+                </div>
+                <div className="text-[10.5px] text-slate-500 tabular-nums dark:text-slate-400">
+                  {activePondWater
+                    ? `pH ${activePondWater.ph} · NH₃ ${activePondWater.ammonia}`
+                    : `${activePond.waterCapacityM3.toLocaleString()} m³`}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  {tr(language, 'Msimamizi & Hewa', 'Keeper & Aerator')}
+                </div>
+                <div className="mt-0.5 truncate text-xs font-bold text-slate-900 dark:text-white">
+                  {activePondKeeper?.name || tr(language, 'Aliyepangiwa', 'Assigned')}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onToggleAerator(activePond.id)}
+                  className={`mt-1 inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold ${
+                    activePond.aeratorRelayOn
+                      ? 'bg-[#1D72E8] text-white'
+                      : 'bg-slate-200/80 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {tr(language, 'Kipulizia:', 'Aerator:')}{' '}
+                  {activePond.aeratorRelayOn ? tr(language, 'Washa', 'ON') : tr(language, 'Tayari', 'Standby')}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectPondQr(activePond)}
+                className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl bg-[#1D72E8] px-3 py-2 text-xs font-bold text-white shadow-xs"
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                <span>{tr(language, 'Profaili & QR', 'Full Profile & QR')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenFullWorkspace('map')}
+                className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                <MapPin className="h-3.5 w-3.5 text-[#1D72E8]" />
+                <span>{tr(language, 'Ramani Kamili', 'Full GIS Map')}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Full GIS Link Strip */}
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-            {tr(language, `Mabwawa (${filteredPonds.length})`, `Ponds (${filteredPonds.length})`)}
+            {tr(language, `Mabwawa (${filteredPonds.length}) — Gusa kuchagua kwenye ramani`, `Ponds (${filteredPonds.length}) — Tap to show on map`)}
           </span>
           <button
             type="button"
             onClick={() => onOpenFullWorkspace('map')}
-            className="text-xs font-bold text-[#1D72E8] dark:text-sky-400"
+            className="shrink-0 text-xs font-bold text-[#1D72E8] dark:text-sky-400"
           >
-            {tr(language, 'Fungua Ramani Kamili →', 'Open Full GIS Map →')}
+            {tr(language, 'Ramani Kamili →', 'Full Map →')}
           </button>
         </div>
 
@@ -682,6 +933,7 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
           {filteredPonds.map((pond) => {
             const pondWater = state.waterReadings.find((w) => w.pondCode === pond.code);
             const temp = pondWater ? `${pondWater.temperature.toFixed(0)}°C` : '26°C';
+            const isSelectedOnMap = activePond?.id === pond.id;
             const badgeTone =
               pond.status === 'Attention'
                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'
@@ -690,34 +942,52 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                   : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200';
 
             return (
-              <button
+              <div
                 key={pond.id}
-                type="button"
-                onClick={() => onSelectPondQr(pond)}
-                className="flex min-h-[68px] w-full items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-2.5 text-left shadow-rest active:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+                className={`flex min-h-[70px] w-full items-center justify-between gap-2 rounded-2xl border bg-white p-2.5 shadow-rest transition-colors dark:bg-slate-900 ${
+                  isSelectedOnMap
+                    ? 'border-[#1D72E8] ring-2 ring-[#1D72E8]/20 dark:border-sky-500'
+                    : 'border-slate-200/80 dark:border-slate-800'
+                }`}
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleSelectPondOnMap(pond)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
                   <img
                     src={ASSET_IMAGES.pondThumb}
                     alt={pond.name}
                     className="h-12 w-16 shrink-0 rounded-xl object-cover"
                   />
                   <div className="min-w-0">
-                    <div className="truncate font-display text-sm font-extrabold text-slate-900 dark:text-white">
-                      {pond.name} <span className="text-[11px] font-semibold text-slate-400">({pond.code})</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="truncate font-display text-sm font-extrabold text-slate-900 dark:text-white">
+                        {pond.name}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-400">({pond.code})</span>
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                      {tr(language, 'Akiba', 'Stock')}: {formatNumber(pond.currentFish)} | {temp}
+                    <div className="mt-0.5 truncate text-xs text-slate-500 tabular-nums dark:text-slate-400">
+                      {tr(language, 'Akiba', 'Stock')}: {formatNumber(pond.currentFish)} | {temp} ·{' '}
+                      {tDomain(language, pond.species)}
                     </div>
                   </div>
-                </div>
+                </button>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${badgeTone}`}>
                     {tDomain(language, pond.status)}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                  <button
+                    type="button"
+                    onClick={() => onSelectPondQr(pond)}
+                    title={tr(language, 'Fungua maelezo kamili na QR', 'Open full details & QR')}
+                    aria-label={tr(language, `Fungua maelezo ya ${pond.name}`, `Open details for ${pond.name}`)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-sky-50 hover:text-[#1D72E8] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    <QrCode className="h-4 w-4" />
+                  </button>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -1376,6 +1646,16 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
 
         {activeNav === 'inventory' ? (
           <>
+            {/* Prominent Purchase / Restock CTA */}
+            <button
+              type="button"
+              onClick={() => onQuickAction('inventory')}
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0D9488] to-[#0B7189] px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition-transform active:scale-[0.99]"
+            >
+              <PackagePlus className="h-4.5 w-4.5" />
+              <span>{tr(language, '+ Rekodi Manunuzi / Ongeza Stoo', '+ Record Purchase / Restock')}</span>
+            </button>
+
             {lowStockItem && (
               <button
                 type="button"
@@ -1389,7 +1669,8 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                       {tr(language, 'Stoo Ndogo', 'Low Stock')}: {lowStockItem.name}
                     </div>
                     <div className="truncate text-[11px] text-amber-800 dark:text-amber-300">
-                      ({lowStockItem.stock} {lowStockItem.unit} {tr(language, 'zimebaki', 'left')})
+                      {lowStockItem.stock} {lowStockItem.unit} {tr(language, 'zimebaki', 'left')} ·{' '}
+                      {tr(language, 'Gusa kuongeza', 'Tap to restock')}
                     </div>
                   </div>
                 </div>
@@ -1400,7 +1681,7 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
             <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-rest dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-display text-sm font-extrabold text-[#081C3A] dark:text-white">
-                  {tr(language, 'Bidhaa za Stoo', 'Stock Items')}
+                  {tr(language, 'Bidhaa za Stoo', 'Stock Items')} ({state.inventory.length})
                 </h3>
                 <button
                   type="button"
@@ -1411,12 +1692,12 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                 </button>
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {state.inventory.slice(0, 4).map((item) => (
+                {state.inventory.slice(0, 5).map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => onRestockItem(item.id)}
-                    className="flex min-h-[52px] w-full items-center justify-between gap-2 py-2 text-left"
+                    className="flex min-h-[54px] w-full items-center justify-between gap-2 py-2 text-left"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -1426,8 +1707,9 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                         <div className="truncate text-xs font-bold text-slate-900 dark:text-white">
                           {item.name}
                         </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                          {item.stock} {item.unit}
+                        <div className="truncate text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                          {item.stock.toLocaleString()} {item.unit}
+                          {item.sku ? ` · ${item.sku}` : ''} · {formatTzs(item.unitCostTzs)}
                         </div>
                       </div>
                     </div>
@@ -1441,6 +1723,45 @@ export const MobileAppScreens: React.FC<MobileScreensProps> = ({
                       {tDomain(language, item.status)}
                     </span>
                   </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Stock Purchases Ledger Preview */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-rest dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-display text-sm font-extrabold text-[#081C3A] dark:text-white">
+                  {tr(language, 'Manunuzi ya Hivi Karibuni', 'Recent Purchases')}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => onOpenFullWorkspace()}
+                  className="text-xs font-bold text-[#1D72E8] dark:text-sky-400"
+                >
+                  {tr(language, 'Daftari Kamili', 'Full Ledger')}
+                </button>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(state.stockPurchases || []).slice(0, 3).map((pur) => (
+                  <div key={pur.id} className="flex items-center justify-between gap-2 py-2 text-xs">
+                    <div className="min-w-0">
+                      <div className="truncate font-bold text-slate-900 dark:text-white">
+                        {pur.itemName}
+                      </div>
+                      <div className="truncate text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                        {pur.quantity} {pur.unit} · {pur.supplier}
+                        {pur.sku ? ` · ${pur.sku}` : ''}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-extrabold text-slate-900 tabular-nums dark:text-white">
+                        {formatTzs(pur.totalCostTzs)}
+                      </div>
+                      <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                        {pur.date} · {tDomain(language, pur.paymentStatus)}
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
